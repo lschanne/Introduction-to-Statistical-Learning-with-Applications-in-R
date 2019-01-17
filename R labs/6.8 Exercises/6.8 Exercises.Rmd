@@ -1,0 +1,551 @@
+---
+title: "6.8: Exercises"
+output:
+  html_document:
+    toc: TRUE
+---
+
+# Exercise 8
+
+In this exercise, we will generate simulated data, and will then use this data to perform best subset selection.
+
+(a) Use the **rnorm()** function to generate a predictor *X* of length $n = 100$, as well as a noise vector $\epsilon$ of length $n = 100$.
+
+```{r}
+set.seed(1)
+x = rnorm(100)
+epsilon = rnorm(100)
+```
+
+(b) Generate a response vector *Y* of length $n = 100$ according to the model
+$$Y = \beta_0 + \beta_1 X + \beta_2 X^2 + \beta_3 X^3 + \epsilon$$
+where $\beta_0, \beta_1, \beta_2,$ and $\beta_3$ are constants of your choice.
+
+```{r}
+y = 1 + 2 * x + 3 * x^2 + 4 * x^3 + epsilon
+```
+
+$\beta_0 = 1, \beta_1 = 2, \beta_2 = 3, \beta_3 = 4$
+
+(c) Use the **regsubsets()** function to perform best subset selection in order to choose the best model containing the predictors $X, X^2,...,X^{10}$. What is the best model obtained according to $C_p$, BIC, and adjusted $R^2$? Show some plots to provide evidence for your answer, and report the coefficients of the best model obtained. Note you will need to use the **data.frame()** function to create a single data set containing both *X* and *Y*.
+
+```{r}
+library(leaps)
+data = data.frame(x = x, y = y)
+regfit.full = regsubsets(y ~ poly(x, 10, raw = TRUE), data = data, nvmax = 10)
+reg.summary = summary(regfit.full)
+reg.summary
+```
+
+```{r}
+idx = which.min(reg.summary$cp)
+plot(reg.summary$cp, xlab = 'Number of Predictors', ylab = 'Cp', col = 'blue')
+points(idx, reg.summary$cp[idx], col = 'red')
+```
+
+```{r}
+coef(regfit.full, idx)
+```
+
+*Based on* $C_p$, *the best model selected by best subset selection is the* 4 *predictor fit, given by*: $y = 1.07 + 2.39 x + 2.85 x^2 + 3.56 x^3 + 0.08 x^5$. *This model seems to have overfit the epsilon a bit, but the values of* $\beta_0, \beta_1, \beta_2,$ *and* $\beta_3$ *are all pretty close to their true values. Technically, the predicted* $\beta_5$ *value is close to its true value of* 0 *as well.*
+
+```{r}
+idx = which.max(reg.summary$adjr2)
+plot(reg.summary$adjr2, xlab = 'Number of Predictors', ylab = 'Adjusted R^2', col = 'blue')
+points(idx, reg.summary$adjr2[idx], col = 'red')
+```
+
+*Based on adjusted* $R^2$, *the best model using best subset selection is also the* 4 *predictor model that was yielded by observing* $C_p$.
+
+```{r}
+coef(regfit.full, 3)
+```
+
+*Examining the* 3 *predictor model yielded by best subset selection, we can see that it is much closer to the true relationship of* X *and* Y.
+
+(d) Repeat (c), using forward stepwise selection and also using backwards stepwise selection. How does your answer compare to the results in (c)?
+
+```{r}
+regfit.fwd = regsubsets(y ~ poly(x, 10, raw = TRUE), data = data, nvmax = 10, method = 'forward')
+reg.summary = summary(regfit.fwd)
+idx = which.min(reg.summary$cp)
+plot(reg.summary$cp, xlab = 'Number of Predictors', ylab = 'Cp', col = 'blue')
+points(idx, reg.summary$cp[idx], col = 'red')
+```
+
+```{r}
+coef(regfit.fwd, idx)
+```
+
+*Interestingly, the forward selection model with the lowest* $C_p$ *value is the exact same model yielded by the best subset method.*
+
+```{r}
+idx = which.max(reg.summary$adjr2)
+plot(reg.summary$adjr2, xlab = 'Number of Predictors', ylab = 'Adjusted R^2', col = 'blue')
+points(idx, reg.summary$adjr2[idx], col = 'red')
+```
+
+*Again, forward selection yields the exact same model based on adjusted* $R^2$.
+
+```{r}
+regfit.bwd = regsubsets(y ~ poly(x, 10, raw = TRUE), data = data, nvmax = 10, method = 'backward')
+reg.summary = summary(regfit.bwd)
+idx = which.min(reg.summary$cp)
+plot(reg.summary$cp, xlab = 'Number of Predictors', ylab = 'Cp', col = 'blue')
+points(idx, reg.summary$cp[idx], col = 'red')
+```
+
+```{r}
+idx = which.max(reg.summary$adjr2)
+plot(reg.summary$adjr2, xlab = 'Number of Predictors', ylab = 'Adjusted R^2', col = 'blue')
+points(idx, reg.summary$adjr2[idx], col = 'red')
+```
+
+*The backwards stepwise selection also yields the same model when examining both* $C_p$ *and adjusted* $R^2$.
+
+(e) Now fit a lasso model to the simulated data, again using $X,X^2,...,X^{10}$ as predictors. Use cross-validation to select the optimal value of $\lambda$. Create plots of the cross-validation error as a function of $\lambda$. Report the resulting coefficient estimates, and discuss the results obtained.
+
+```{r}
+library(glmnet)
+set.seed(1)
+cv.out = cv.glmnet(poly(x, 10, raw = TRUE), y, alpha = 1)
+plot(cv.out)
+```
+
+```{r}
+bestlam = cv.out$lambda.min
+bestlam
+```
+
+```{r}
+predict(glmnet(poly(x, 10, raw = TRUE), y, alpha = 1), type = 'coefficients', s = bestlam)
+```
+
+*The cross-validation with the lasso yields the following sparse model with* 6 *predictors:* $y = 1.183 + 2.138 x + 2.624 x^2 + 3.813 x^3 + 0.042 x^4 + 0.012 x^5 + 0.004 x ^ 7$. *This model is not too far off the true relationship, but it has* 2 *more predictors than the models yielded by subset selection techniques, so it is somewhat less interpretable.*
+
+(f) Now generate a response vector *Y* according to the model
+$$Y = \beta_0 + \beta_7 X^7 + \epsilon$$
+and perform best subset selection and the lasso. Discuss the results obtained.
+
+```{r}
+y = 1 + 8 * x^7 + epsilon
+data = data.frame(x = x, y = y)
+regfit.full = regsubsets(y ~ poly(x, 10, raw = T), data = data, nvmax = 10)
+coef(regfit.full, which.max(summary(regfit.full)$adjr2))
+```
+
+*The true relationship is* $y = 1 + 8 x^7$. *Using best subset selection and observing the adjusted* $R^2$ *value to select the best model, we obtain the following* 4 *predictor model:* $y = 1.076 + 0.291 x - 0.162 x^2 - 0.253 x^3 + 8.009 x^7$. *This model is pretty close to the true relationship. The coefficients of the* $x^3, x^2,$ *and* $x$ *predictors are pretty small, while the* $x^7$ *and intercept coefficients are close to the true values.*
+
+```{r}
+coef(regfit.full, 1)
+```
+
+*Like before, we see that the model with the* correct *number of predictors fit by best subset selection is very close to the true relationship.*
+
+```{r}
+set.seed(1)
+bestlam = cv.glmnet(poly(x, 10, raw = T), y, alpha = 1)$lambda.min
+predict(glmnet(poly(x, 10, raw = T), y, alpha = 1), type = 'coefficients', s = bestlam)
+```
+
+*Using* 10 *fold cross-validation to select a lambda value for the lasso, we obtain the following* 1 *predictor model:* $y = 2.039 + 7.745 x^7$. *This model does not have coefficients that are as close to the true relationship as the best subset model did, but it does have the only one predictor, which drastically improves interpretability.*
+
+---
+
+# Exercise 9
+
+In this exercise, we will predict the number of applications received using the other variables in the **College** data set.
+
+(a) Split the data set into a training set and a test set.
+
+```{r}
+library(ISLR)
+set.seed(1)
+train = sample(c(F,T), dim(College)[1], replace = T)
+test = !train
+```
+
+(b) Fit a linear model using least squares on the training set, and report the test error obtained.
+
+```{r}
+lm.fit = lm(Apps ~ ., data = College, subset = train)
+lm.pred = predict(lm.fit, College[test,], type = 'response')
+lm.mse = mean((College[test, 'Apps'] - lm.pred)^2)
+lm.mse
+```
+
+*The least squares model has a test MSE of* 1,383,033.
+
+(c) Fit a ridge regression model on the training set, with $\lambda$ chosen by cross-validation. Report the test error obtained.
+
+```{r}
+x = model.matrix(Apps ~ ., College)
+y = College[,'Apps']
+set.seed(1)
+bestlambda = cv.glmnet(x[train,], y[train], alpha = 0)$lambda.min
+ridge.fit = glmnet(x[train,], y[train], alpha = 0)
+ridge.pred = predict(ridge.fit, s = bestlambda, newx = x[test,])
+ridge.mse = mean((y[test] - ridge.pred)^2)
+ridge.mse
+(ridge.mse - lm.mse) * 100 / lm.mse
+```
+
+*The ridge regression model has a test MSE of* 1,152,487, *which is* 16.67% *less than the least squares model.*
+
+(d) Fit a lasso model on the training set, with $\lambda$ chosen by cross-validation. Report the test error obtained, along with the number of non-zero coefficient estimates.
+
+```{r}
+set.seed(1)
+bestlambda = cv.glmnet(x[train,], y[train], alpha = 1)$lambda.min
+lasso.fit = glmnet(x[train,], y[train], alpha = 1)
+lasso.pred = predict(lasso.fit, s = bestlambda, newx = x[test,])
+lasso.mse = mean((y[test] - lasso.pred)^2)
+lasso.mse
+(lasso.mse - lm.mse) * 100 / lm.mse
+```
+
+*The lasso model has a test MSE of* 1,329,293, *which is* 3.89% *less than the least squares model.*
+
+```{r}
+predict(lasso.fit, s = bestlambda, type = 'coefficients')
+```
+
+*The lasso model uses* 13 *coefficients, which is* 4 *less than the total number of predictors.*
+
+(e) Fit a PCR model on the training set, with *M* chosen by cross-validation. Report the test error obtained, along with the value of *M* selected by cross-validation.
+
+```{r}
+library(pls)
+set.seed(1)
+pcr.fit = pcr(Apps ~ ., data = College, subset = train, scale = T, validation = 'CV')
+validationplot(pcr.fit, val.type = 'MSEP')
+```
+
+```{r}
+summary(pcr.fit)
+```
+
+*We can see that the best model chosen by cross-validation uses all* 17 *components, which does not actually yield any dimension reduction.*
+
+```{r}
+pcr.pred = predict(pcr.fit, College[test,], ncomps = 17)
+mean((College[test, 'Apps'] - pcr.pred)^2)
+```
+
+*The resulting test MSE is* 2,553,624, *which, surprisingly, is much more than it was using least squares.*
+
+(f) Fit a PLS model on the training set, with *M* chosen by cross-validation. Report the test error obtained, along with the value of *M* selected by cross-validation.
+
+```{r}
+set.seed(1)
+pls.fit = plsr(Apps ~ ., data = College, subset = train, scale = T, validation = 'CV')
+validationplot(pls.fit, val.type = 'MSEP')
+```
+
+```{r}
+summary(pls.fit)
+```
+
+*The best model with the smallest number of dimensions comes from using* 13 *components, reducing the number of dimensions by* 4.
+
+```{r}
+pls.pred = predict(pls.fit, College[test,], ncomp = 13)
+mean((College[test, 'Apps'] - pls.pred)^2)
+```
+
+*The resulting test MSE is* 1,377,696, *which is a hair less than the least squares test MSE of* 1,383,033.
+
+(g) Comment on the results obtained. How accurately can we predict the number of college applications received? Is there much difference among the test errors resulting from these five approaches?
+
+*We saw a decent spread of test MSE from the five approaches. The lowest test MSE came from the ridge regression approach and was* 1,152,487. *The largest test MSE came from the PCR approach and was* 2,553,624 - *almost double. If you only cared about test MSE, ridge regression would probably be the way to go. If model interpretability was important, then the lasso approach might be more appealing. It reduced the problem by the same number of dimensions as the PLS approach while mainting a better test MSE. However, based just on the validation plot for the PLS, it may actually be possible to reduce the number of dimensions to only* 5, *while still maintaining similar predictive performance. This could still be less interpretable than the lasso model with* 13 *predictors, since the PLS uses linear transforms, which can be more difficult to interpret.*
+
+---
+
+# Exercise 10
+
+We have seen that as the number of features used in a model increases, the training error will necessarily decrease, but the test error may not. We will now explore this in a simulated data set.
+
+(a) Generate a data set with $p = 20$ features, $n = 1,000$ observations, and an associated quantitative response vector generated according to the model
+$$Y = X \beta + \epsilon$$
+where $\beta$ has some elements that are exactly equal to zero.
+
+```{r}
+p = 20
+n = 1000
+
+# Randomly generate the X matrix and the beta array
+set.seed(1)
+X = matrix(rnorm(n*p, mean = 0, sd = 1), n, p)
+beta = sample(1:5, size = p, replace = T)
+
+# Set some beta values to exactly zero
+beta[c(3,5,7)] = 0
+
+Y = rep(0, n)
+for (i in 1:p) Y = Y + beta[i] * X[,i]
+
+# Add noise to Y
+Y = Y + rnorm(n, mean = 0, sd = 1)
+
+beta
+```
+
+(b) Split your data set into a training set containing 100 observations and a test set containing 900 observations.
+
+```{r}
+set.seed(1)
+train = sample(1:n, size = 100, replace = F)
+Y.train = Y[train]
+X.train = X[train,]
+Y.test = Y[-train]
+X.test = X[-train,]
+```
+
+(c) Perform best subset selection on the training set and plot the training set MSE associated with the best model of each size.
+
+```{r}
+# Put X and Y into a dataframe to use with regsubsets
+df = data.frame(X)
+X.names = rep('', p)
+for (i in 1:p) X.names[i] = paste('X', toString(i), sep = "")
+colnames(df) = X.names
+df$Y = Y
+```
+
+```{r}
+set.seed(1)
+regfit.best = regsubsets(Y ~ ., data = df[train,], nvmax = p)
+summary(regfit.best)
+```
+
+```{r}
+# Create function for predicting MSE from subset models
+predict.MSE = function(object, newdata, id, ...) {
+  form = as.formula(object$call[[2]])
+  mat = model.matrix(form, newdata)
+  coefi = coef(object, id = id)
+  xvars = names(coefi)
+  pred = mat[,xvars]%*%coefi
+  mse = mean((newdata[,'Y'] - pred)^2)
+  return(mse)
+}
+```
+
+```{r}
+train.MSE = rep(0, p)
+for (i in 1:p) train.MSE[i] = predict.MSE(regfit.best, df[train,], i)
+plot(x = 1:p, y = train.MSE, xlab = 'Number of Predictors', ylab = 'Train MSE', col = 'red', type = 'b')
+min.idx = which.min(train.MSE)
+points(min.idx, train.MSE[min.idx], col = 'blue')
+```
+
+```{r}
+train.MSE
+min.idx
+```
+
+(d) Plot the test set MSE associated with the best model of each size.
+
+```{r}
+test.MSE = rep(0, p)
+for (i in 1:p) test.MSE[i] = predict.MSE(regfit.best, df[-train,], i)
+plot(x = 1:p, y = test.MSE, xlab = 'Number of Predictors', ylab = 'Test MSE', col = 'red', type = 'b')
+min.idx = which.min(test.MSE)
+points(min.idx, test.MSE[min.idx], col = 'blue')
+```
+
+```{r}
+test.MSE
+min.idx
+```
+
+(e) For which model size does the test set MSE take on its minimum value? Comment on your results. If it takes on its minimum value for a model containing only an intercept or a model containing all of the features, then play around with the way you are generating the data in (a) until you come up with a scenario in which the test set MSE is minimized for an intermediate model size.
+
+*The* 17 *predictor model seems to have the best test MSE. This result makes a lot of sense, since we set* 3 *beta values to* 0 *and* 17 *beta values to a non-zero.*
+
+(f) How does the model at which the test set MSE is minimized compare to the true model used to generate the data? Comment on the coefficient values.
+
+```{r}
+coef(regfit.best, id = min.idx)
+beta
+```
+
+*As expected, X3, X5, and X7 are the predictors which are omitted from the best performing model. These were the three zero-value predictors (i.e. the noise). All of the other predicted coefficients are very close to their true values.*
+
+(g) Create a plot displaying $\sqrt{\sum^p_{j=1}(\beta_j - \hat{\beta^r_j})^2}$ for a range of values of *r*, where $\hat{\beta^r_j}$ is the *j*th coefficient estimate for the best model containing *r* coefficients. Comment on what you observe. How does this compare to the test MSE plot from (d)?
+
+```{r}
+predictor.error = rep(0, p + 1)
+
+# The 0 predictor model will have a predictor.error equal to the sum of the squares of each beta
+predictor.error[1] = sum(beta^2)
+
+for (r in 1:p)
+{
+  coefi = coef(regfit.best, id = r)
+  for (i in 1:p)
+  {
+    this.error = beta[i]
+    col.name = paste('X', toString(i), sep = '')
+    if (col.name %in% names(coefi)) this.error = this.error - coefi[col.name]
+    predictor.error[r + 1] = predictor.error[r + 1] + this.error^2
+  }
+}
+predictor.error = sqrt(predictor.error)
+
+plot(x = 0:p, y = predictor.error, xlab = 'Number of Predictors', ylab = 'Predictor Error', col = 'red', type = 'b')
+min.idx = which.min(predictor.error)
+points(min.idx - 1, predictor.error[min.idx], col = 'blue')
+```
+
+```{r}
+predictor.error
+min.idx
+```
+
+*From the plot, you can see that as we keep adding signal variables, the total error in estimated predictors decreases monotonically. However, as soon as we start to add in noise variables, the total error in estimated predictors begins to increase monotonically.*
+
+---
+
+# Exercise 11
+
+We will now try to predict per capita crime rate in the **Boston** data set.
+
+```{r}
+library(MASS)
+sum(is.na(Boston))
+```
+
+*Luckily, the Boston data set has no NaNs in it, so we don't have to worry about that.*
+
+(a) Try out some of the regression methods explored in this chapter, such as best subset selection, the lasso, ridge regression, and PCR. Present and discuss results for the approaches that you consider.
+
+*Separate data into training set and test set.*
+
+```{r}
+set.seed(1)
+train.index = sample(1:nrow(Boston), nrow(Boston)/2)
+Boston.train = Boston[train.index,]
+Boston.test = Boston[-train.index,]
+```
+
+*Try best subset selection.*
+
+```{r}
+# Set the maximum number of predictors
+p = ncol(Boston) - 1
+regfit.best = regsubsets(crim ~ ., data = Boston.train, nvmax = p)
+
+# Need to tweak function from before to point to the 'crim' column
+predict.MSE = function(object, newdata, id, ...) {
+  form = as.formula(object$call[[2]])
+  mat = model.matrix(form, newdata)
+  coefi = coef(object, id = id)
+  xvars = names(coefi)
+  pred = mat[,xvars]%*%coefi
+  mse = mean((newdata[,'crim'] - pred)^2)
+  return(mse)
+}
+
+# Find the model with the lowest test MSE
+test.MSE = rep(0, p)
+for (i in 1:p) test.MSE[i] = predict.MSE(regfit.best, Boston.test, i)
+min.idx = which.min(test.MSE)
+
+# Visually represent the lowest test MSE
+plot(1:p, test.MSE, xlab = 'Number of Predictors', ylab = 'Test MSE', main = 'Best Subset Selection', col = 'red', type = 'b')
+points(min.idx, test.MSE[min.idx], col = 'blue')
+```
+
+*We can see that the* 4 *predictor model has the lowest test MSE of all the models fit via best subset selection.*
+
+```{r}
+test.MSE[min.idx]
+coef(regfit.best, id = min.idx)
+```
+
+*Using the proportion of residential land zoned (zn), the weighted mean distances to five Boston employment centres (dis), the index of accessibility to radial highways (rad), and the median value of owner-occupied homes (medv), this* 4-*predictor model has a test MSE of* 38.96427.
+
+*Try the lasso method.*
+
+```{r}
+# Create X and Y matrices to use for lasso and ridge regression
+Y.train = Boston.train[,'crim']
+X.train = model.matrix(crim ~ ., Boston.train)
+Y.test = Boston.test[,'crim']
+X.test = model.matrix(crim ~ ., Boston.test)
+
+# Find the best lambda for the lasso based on 10-fold cross-validation with the training data
+set.seed(1)
+bestlambda = cv.glmnet(X.train, Y.train, alpha = 1)$lambda.min
+
+# Calculate the test MSE based on that lambda
+lasso.fit = glmnet(X.train, Y.train, alpha = 1)
+lasso.pred = predict(lasso.fit, s = bestlambda, newx = X.test)
+lasso.mse = mean((lasso.pred - Y.test)^2)
+
+# Find the model coefficients which yield that test MSE
+lasso.coef = predict(lasso.fit, s = bestlambda, type = 'coefficients')
+
+# Print findings
+lasso.mse
+lasso.coef
+```
+
+*The lasso method yields an* 11-*predictor model with a test MSE of* 38.31114.
+
+*Try ridge regression.*
+
+```{r}
+# Find the best lambda for ridge regression based on 10-fold cross-validation with the training data
+set.seed(1)
+bestlambda = cv.glmnet(X.train, Y.train, alpha = 0)$lambda.min
+
+# Calculate the test MSE based on that lambda
+ridge.fit = glmnet(X.train, Y.train, alpha = 0)
+ridge.pred = predict(ridge.fit, s = bestlambda, newx = X.test)
+ridge.mse = mean((ridge.pred - Y.test)^2)
+
+# Find the model coefficients which yield that test MSE
+ridge.coef = predict(ridge.fit, s = bestlambda, type = 'coefficients')
+
+# Print findings
+ridge.mse
+ridge.coef
+```
+
+*The ridge regression yeilds a model where* 2 *of the predictors, age and tax, are very close to zero. This model has a test MSE of* 38.36719.
+
+*Try PCR.*
+
+```{r}
+# Determine the best Principal Components Regression model via 10-fold cross-validation with the training data
+pcr.fit = pcr(crim ~ ., data = Boston.train, scale = T, validation = "CV", segments = 10)
+
+# Examine the resulting model
+validationplot(pcr.fit, val.type = 'MSEP')
+```
+
+```{r}
+summary(pcr.fit)
+```
+
+*The best PCR model using all* 13 *principal components.*
+
+```{r}
+# Find the test MSE with the PCR model
+pcr.pred = predict(pcr.fit, Boston.test, ncomps = 13)
+pcr.mse = mean((pcr.pred - Y.test)^2)
+pcr.mse
+```
+
+*This PCR model has a test MSE of* 41.4208.
+
+
+(b) Propose a model (or set of models) that seem to perform well on this data set, and justify your answer. Make sure that you are evaluating model performance using validation set error, cross-validation, or some other reasonable alternative, as opposed to using training error.
+
+*The best subset model had a test MSE of* 38.96427 *and used* 4 *predictors. The lasso model had a test MSE of* 38.31114 *and used* 11 *predictors. The ridge regression model had a test MSE of* 38.36719. *The PCR model had a test MSE of* 41.4208 *and used* 13 *principal components. The PCR model had the highest test MSE and did not result in any dimension reduction, so it definitely seems like the worst model. The other models all had very close test MSEs. The lasso model had the lowest test MSE, so if we only cared about prediction accuracy, we would probably go with that model. However, the best subset model had a very similar test MSE and uses only* 4 *predictors, so I would choose that model as the best.*
+
+(c) Does your chosen model involve all of the features in the data set? Why or why not?
+
+*No, the best subset model uses relatively few predictors. From the results of all of the models, it seems like at least* 2 *or* 3 *of the variables in the Boston set are only noise in terms of predicting the crime rate.*

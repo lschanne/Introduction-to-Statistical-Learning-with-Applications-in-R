@@ -1,0 +1,254 @@
+---
+title: "2.3 Lab: Introduction to R"
+author: "Luke Schanne"
+output:
+    html_document:
+      toc: TRUE
+---
+```{r}
+# comment
+```
+
+To create a vector of numbers, use the function **c()** - c for *concatenate*. Any numbers inside the parentheses are joined together.
+
+```{r}
+x <- c(1,3,2,5)
+x
+```
+We can also save things using **=** rather than **<-**
+```{r}
+x = c(1,6,2)
+x
+y = c(1,4,3)
+y
+```
+Can check vector length using the **length()** function.
+Can add vectors of the same length together.
+```{r}
+length(x)
+length(y)
+x + y
+```
+Let's see what happens with vectors of different length.
+```{r}
+z = c(1,2,3,4)
+x + z
+```
+The **ls()** function allows us to look at a list of all the objects, such as data and functions, that we have saved so far. The **rm()** function can be used to delete any that we don't want.
+```{r}
+ls()
+rm(x,y)
+ls()
+```
+It is also possible to remove all objects at once.
+```{r}
+rm(list=ls())
+ls()
+```
+The **?** can be used as a help call on functions.
+```{r}
+?matrix
+```
+The **matrix()** function takes a number of inputs, but for now we focus on the first three: the data, the number of rows, and the number of columns.
+```{r}
+x = matrix(data=c(1,2,3,4), nrow=2, ncol=2)
+x
+is.matrix(x)
+```
+Notice that we can omit the keywords in this call because **data**, **nrow**, and **ncol** are also the first three arguments to matrix.
+```{r}
+y = matrix(c(1,2,3,4),2,2)
+y == x
+```
+**byrow=True** can be used to populate the matrix in order of the rows.
+```{r}
+matrix(c(1,2,3,4),2,2,byrow=TRUE)
+```
+**sqrt()** takes the square root.
+**^** is used for exponents.
+Notice how vector/matrix operations work very nicely here.
+```{r}
+sqrt(x)
+x^2
+```
+**rnorm()** generates a vector of random normal variables, with first argument n the sample size. Each time we call this function, we will (likely) get a different answer. Here we create two correlated sets of numbers, **x** and **y**, and use the **cor()** function to compute the correlation between them.
+```{r}
+x = rnorm(50)
+y = x + rnorm(50, mean=50, sd=.1)
+cor(x,y)
+```
+By default, **rnorm()** creates standard normal random variables with a mean of 0 and a standard deviation of 1. However, the mean and standard deviation can be altered using the **mean** and **sd** arguments, as illustrated above. Sometimes, we want our code to reporudce the exact same set of random numbers; we can use the **set.seed()** function to do this. The **set.seed()** function takes an (arbitrary) integer argument.
+```{r}
+set.seed(1303)
+rnorm(50)
+```
+We will use **set.seed()** throughout the labs whenever we perform calculations involving random quantities. In general this should allow the user to reproduce the same results.
+
+The **mean()** and **var()** functions can be used to compute the mean and variance of a vector of numbers. Applying **sqrt()** to the output of **var()** will give the standard deviation. Or we can simply use the **sd()** function.
+```{r}
+set.seed(3)
+y=rnorm(100)
+mean(y)
+var(y)
+sqrt(var(y))
+sd(y)
+```
+# Graphics
+
+The **plot()** function is the primary way to plot data in R. For instance, **plot(x,y)** produces a scatterplot of the numbers in **x** versus the numbers in **y**. There are many additional options that can be passed into the **plot()** function. For example, passing in the argument **xlab** will result in a label on the x-axis. To find out more information about the **plot()** function, type **?plot**.
+```{r}
+x=rnorm(100)
+y=rnorm(100)
+plot(x,y)
+```
+With some keywords...
+```{r}
+plot(x,y,xlab='this is the x-axis', ylab='this is the y-axis', main='Plot of Y vs X')
+```
+We can use the **pdf()** function or **jpeg()** function to save a figure.
+
+Call **dev.off()** to indicate to R that we are done creating the plot.
+```{r}
+pdf("Figure.pdf")
+plot(x,y,col='green')
+dev.off()
+```
+**seq()** can be used to create a sequence of numbers. For instance, **seq(a,b)** makes a vector of integers between **a** and **b**. There are many other options: for instance, **sq(0,1,length=10)** makes a sequence of 10 numbers that are equally spaced between 0 and 1. Typing **3:11** is a shorthand for **seq(3,11)** for integer arguments.
+```{r}
+seq(1,10)
+1:10
+seq(-pi,pi,length=50)
+```
+**countour()** produces a contour plot in order to represent three-dimensional data; it is like a topographical map. It takes three arguments:
+  1. A vector of the **x** values (the first dimension),
+  2. A vecotr of the **y** values (the second dimension), and
+  3. A matrix whose elements correspond to the **z** values (the third dimension) for each pair of (**x**,**y**) coordinates.
+```{r}
+x=y=seq(-pi,pi,length=50)
+f=outer(x,y,function(x,y)cos(y)/(1+x^2))
+contour(x,y,f)
+```
+As with the **plot()** function, there are many other inputs that can be used to fine-tune the output of the **contour()** function.
+```{r}
+plot.new()
+contour(x,y,f,nlevels=45,add=T)
+```
+Something, something countour...
+```{r}
+fa=(f-t(f))/2
+contour(x,y,fa,nlevels=15)
+```
+**image()** works the same way as **contour()**, except that it produces a color-coded plot whose colors depend on the **z** value. This is known as a *heatmap*, and is sometimes used to plot temperature in weather forecasts. Alternatively, **persp()** can be used to produce a three-dimensional plot. The arguments **theta** and **phi** control the angles at which the plot is viewed.
+```{r}
+plot.new()
+image(x,y,fa)
+persp(x,y,fa)
+persp(x,y,fa,theta=30)
+persp(x,y,fa,theta=30,phi=20)
+persp(x,y,fa,theta=30,phi=70)
+persp(x,y,fa,theta=30,phi=40)
+```
+# Indexing Data
+
+We often wish to examine part of a set of data. Suppose that our data is stored in the matrix **A**.
+```{r}
+A = matrix(1:16,4,4)
+A
+```
+Then, by typing **A[2,3]**, we can select the element corresponding ot the second row and the third column. The first number after the open-bracket symbol [ always refers to the rows, and the second number always refers to the column.
+
+Notice that indexing is one-based.
+```{r}
+A[2,3]
+```
+We can also select multiple rows and columns at a time, by providing vecotrs as the indices.
+```{r}
+A[c(1,3), c(2,4)]
+A[1:3,2:4]
+A[1:2,]
+A[,1:2]
+```
+The use of a negative sign **-** in the index tells R to keep all rows or columns except those indicated in the index.
+```{r}
+A[-c(1,3),]
+A[-c(1,3), -c(1,3,4)]
+```
+The **dim()** function outputs the number of rows followed by the number of columns of a given matrix.
+```{r}
+dim(A)
+```
+# Loading Data
+
+**read.table()** is used to import a data set into R.
+**write.table()** is used to export data.
+
+**fix()** can be used to view data in a spreadsheet-like window. However, the indow must be closed before further R commands can be entered.
+```{r}
+Auto=read.table('D:\\GoogleDrive\\Introduction to Statistical Learning with Applications in R\\data-sets\\Auto.data')
+fix(Auto)
+```
+This data set has not been loaded correctly, because R has assumed that the variable names are part of the data and so has included them in the first row. The data set also includes a number of missing ovservations, indicated by a question mark **?**. Missing values are a common occurrence in real data sets. Using the option **header=T** (or **header=TRUE**) in the **read.table()** function tells R that the first line of the file contains the variable names, and using the options **na.strings** tells R that any time it sees a particular character or set of characters (such as a question mark), it should be treated as a missing element of the data matrix.
+```{r}
+fh='D:\\GoogleDrive\\Introduction to Statistical Learning with Applications in R\\data-sets\\Auto.data'
+Auto=read.table(fh, header=T, na.strings='?')
+fix(Auto)
+```
+Excel is a common-format data storage program. An easy way to load such data into R is to svae it as a csv (*comma separated value*) file and then use the **read.csv()** function to load it in.
+```{r}
+fh='D:\\GoogleDrive\\Introduction to Statistical Learning with Applications in R\\data-sets\\Auto.csv'
+Auto=read.csv(fh, header=T, na.strings="?")
+dim(Auto)
+```
+We can use the **na.omit()** function to remove all rows with missing data.
+```{r}
+Auto=na.omit(Auto)
+dim(Auto)
+```
+We can use **names()** to check the variable names of the data.
+```{r}
+names(Auto)
+```
+# Additional Graphical and Numerical Summaries
+
+To refer to a variable in a data set, we must type the data set and the variable name joined with a **$** symbol. Alternatively, we can use the **attach()** function in order to tell R to make the variables in this data frame available by name.
+```{r}
+plot(Auto$cylinders, Auto$mpg)
+attach(Auto)
+plot(cylinders, mpg)
+```
+**cylinders** is stored as anumeric vector, so R has treated it as quantitative. However, since there are only a small number of possible values for **cylinders**, it may be better to treat it qualitatively. The **as.factor()** function converts quantitative variables into qualitative ones.
+```{r}
+cylinders=as.factor(cylinders)
+```
+If the variable plotted on the *x*-axis is categorical, then *boxplots* will automatically be produced by the **plot()** function. As usual, a number of options can be specified in order to customize the plots.
+```{r}
+plot(cylinders, mpg)
+plot(cylinders, mpg, col='red')
+plot(cylinders, mpg, col='red', varwidth=T)
+plot(cylinders, mpg, col='red', varwidth=T, horizontal=T)
+plot(cylinders, mpg, col='red', varwidth=T, xlab='cylinders', ylab='MPG')
+```
+The **hist()** function can be used to plot a *histogram*. Note that **col=2** has the same effect as **col="red"**.
+```{r}
+hist(mpg)
+hist(mpg, col=2)
+hist(mpg, col=2, breaks=15)
+```
+The **pairs()** function creates a *scatterplot matrix* i.e. a scatterplot for every pair of variables for any given data set. We can also produce scatterplots for just a subset of the variables.
+```{r}
+pairs(Auto)
+pairs(~ mpg + displacement + horsepower + weight + acceleration, Auto)
+```
+In conjuction with the **plot()** function, **identify()** provides a useful interactive method for identifying the value for a particular variable for points on a plot. We pass in three arguments to **identify()**: the *x*-axis variable, the*y*-axis variable, and the variable whose values we would like to see printed for each point. Then clicking on a given point in the plot will cause R to print the value of the variable of interset. Right-clicking on the plot will exist the **identify()** function. The numbers printed under the **indetify()** function correspond to the rows for the selected points.
+```{r}
+plot(horsepower, mpg)
+identify(horsepower, mpg, name)
+```
+The **summary()** function produces a numerical summary of each variable in a particular data set.
+```{r}
+summary(Auto)
+```
+For qualitative variables such as **name**, R will list the number of observations that fall in each category. We can also produce a summary of just a single variable.
+```{r}
+summary(mpg)
+```

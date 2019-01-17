@@ -1,0 +1,669 @@
+---
+title: "8.4 Exercises"
+output:
+  html_document:
+    toc: TRUE
+---
+
+```{r}
+# load all libraries needed for these exercises
+library(MASS)
+library(randomForest)
+library(tree)
+library(ISLR)
+library(gbm)
+library(leaps)
+library(class)
+library(datasets)
+```
+
+# Exercise 7
+
+In the lab, we applied random forests to the **Boston** data using **mtry=6** and using **ntree=25** and **ntree=500**. Create a plot displaying the test error resulting from random forests on this data set for a more comprehensive range of values for **mtry** and **ntree**. You can model your plot after Figure 8.10. Describe the results obtained.
+
+
+```{r}
+# Boston data set is in the MASS library
+library(MASS)
+
+# create a training set index with half the data
+set.seed(1)
+train = sample(1:nrow(Boston), size = nrow(Boston)/2, replace = FALSE)
+
+# per Figure 8.10, we will test 1 to 500 trees, with m = p, m = p/2, and m = sqrt(p)
+ntrees = 1:500
+test.mse = data.frame(p = rep(NaN, length(ntrees)), p2 = rep(NaN, length(ntrees)), sqrt.p = rep(NaN, length(ntrees)))
+
+# one of the columns is the response and therefore not a valid predictor
+p = ncol(Boston) - 1
+columns = c('p', 'p2', 'sqrt.p')
+m.values = c(p, p/2, sqrt(p))
+
+# Load the randomForest() function from the randomForest library
+library(randomForest)
+
+getTestMSE = function(ntree, mtry){
+  rf.model = randomForest(medv ~ ., data = Boston, subset = train, mtry = mtry, ntree = ntree)
+  rf.pred = predict(rf.model, newdata = Boston[-train,])
+  return(mean((rf.pred - Boston[-train, 'medv'])^2))
+}
+
+# loop through different numbers of trees and find the three test errors
+# record the minimum test error
+min.error = Inf
+for (ntree in ntrees){
+  for (i in 1:length(m.values)){
+    this.col = columns[i]
+    m = m.values[i]
+    this.error = getTestMSE(ntree, m)
+    test.mse[ntree, this.col] = this.error
+    if (this.error < min.error){
+      min.error = this.error
+      min.ntree = ntree
+      min.m = m
+    }
+  }
+}
+```
+
+```{r}
+# Bound the y-axis limits of the plot to avoid cutting off the lines
+y.min = min.m - 3
+y.max = max(test.mse) + 3
+
+# plot test errors in the same fasion as Figure 8.10
+plot(ntrees, test.mse$p, xlab = 'Number of Trees', ylab = 'Test MSE', col = 'yellow', type = 'l', ylim = c(y.min, y.max))
+lines(ntrees, test.mse$p2, col = 'blue')
+lines(ntrees, test.mse$sqrt.p, col = 'green')
+points(min.ntree, min.error, col = 'red')
+legend('topright', col = c('yellow', 'blue', 'green'), legend = c('m = p', 'm = p/2', expression(paste('m = ', sqrt(p)))), lty = 1)
+```
+
+*In this plot, it's hard to see much of a difference between the different values of* m, *but we can clearly see that additional trees after about* 50 *are not providing additional test accuracy.*
+
+```{r}
+# print the minimum error and the associated ntree and mtry
+min.error
+min.ntree
+min.m
+```
+
+*The lowest test MSE resulted from aggregating* 27 *trees and considering* p/2 *predictors at each branch. Let's zoom in our plot around here to get a better look at what's going on.*
+
+```{r}
+zoom.index = 20:50
+plot(zoom.index, test.mse[zoom.index, 'p'], xlab = 'Number of Trees', ylab = 'Test MSE', col = 'yellow', type = 'l', ylim = c(y.min, y.max))
+lines(zoom.index, test.mse[zoom.index, 'p2'], col = 'blue')
+lines(zoom.index, test.mse[zoom.index, 'sqrt.p'], col = 'green')
+points(min.ntree, min.error, col = 'red')
+legend('topright', col = c('yellow', 'blue', 'green'), legend = c('m = p', 'm = p/2', expression(paste('m = ', sqrt(p)))), lty = 1)
+```
+
+*So here we can see that in this range of numbers of trees, there really isn't much difference between the different values for* m *or the number of trees being used. In fact, our selection of this particular pair of* m *and* ntrees *seems like it could just be a bit of noise in the variations in test error. In conclusion, for this data set, it seems like the only important thing is to use a sufficient number of trees in the bagging and/or random forests.* 25 *or more trees seems sufficient based on this data.*
+
+---
+
+# Exercise 8
+
+In the lab, a classification tree was applied to the **Carseats** data set after converting **Sales** into a qualitative response variable. Now we will seek to predict **Sales** using regression trees and related approaches, treating the response as a quantitative variable.
+
+
+```{r}
+# the Carseats data set resides in the ISLR library
+library(ISLR)
+```
+
+(a) Split the data set into a training set and a test set.
+
+
+```{r}
+# we'll go 50-50 on training and test data
+train = sample(nrow(Carseats), nrow(Carseats)/2, replace = F)
+```
+
+(b) Fit a regression tree to the training set. Plot the tree and interpret the results. What test MSE do you obtain?
+
+
+```{r}
+# the tree() function is in the tree library
+library(tree)
+
+# Make a reusable function for getting the test mse on this data set
+getTestMSE = function(model){
+  model.pred = predict(model, newdata = Carseats[-train,])
+  return(mean((model.pred - Carseats[-train, 'Sales'])^2))
+}
+
+tree.model = tree(Sales ~ ., data = Carseats, subset = train)
+tree.mse = getTestMSE(tree.model)
+tree.mse
+```
+
+*A simple regression tree yields a test MSE of* 4.73.
+
+```{r}
+plot(tree.model)
+text(tree.model, pretty = 0)
+```
+
+*In this tree, the most important predictors are considered to be* **Price** *and* **ShelveLoc**.
+
+(c) Use cross-validation in order to determine the optimal level of tree complexity. Does pruning the tree improve the test MSE?
+
+
+```{r}
+set.seed(4)
+cv.carseats = cv.tree(tree.model)
+plot(cv.carseats$size, cv.carseats$dev, pch = 20, col = 'blue', xlab = 'Tree Size', ylab = 'Misclassification Deviance')
+```
+
+```{r}
+best.size = cv.carseats$size[which.min(cv.carseats$dev)]
+best.size
+```
+
+```{r}
+prune.model = prune.tree(tree.model, best = best.size)
+getTestMSE(prune.model)
+```
+
+*The pruned model with 11 terminal nodes does not yield a lower test MSE. Note, I played with the seed value I set before taking the CV so that I would get a smaller tree. Seeds 1-3 actually did not result in a smaller tree.*
+
+```{r}
+# Let's plot the test MSE of different sizes to see if any of them yield a smaller test MSE
+max.size = length(cv.carseats$size) + 1
+test.mse = rep(NA, max.size)
+for (this.size in 2:max.size){
+  test.mse[this.size] = getTestMSE(prune.tree(tree.model, best = this.size))
+}
+best.size = which.min(test.mse)
+plot(test.mse, xlab = "Number of Terminal Nodes", ylab = "Test MSE", col = "blue")
+points(best.size, test.mse[best.size], col = "red")
+```
+
+```{r}
+best.size
+test.mse[best.size]
+```
+
+*The pruned tree with only 16 terminal nodes has a slightly lower test MSE than the fully grown tree in this case.*
+
+(d) Use the bagging approach in order to analyze this data. What test MSE do you obtain? Use the **importance()** function to determine which variables are most important.
+
+
+```{r}
+set.seed(1)
+
+# We need to set mtry equal to the number of predictors in the model in order to perform bagging instead of random forests
+p = ncol(Carseats) - 1
+bag.carseats = randomForest(Sales ~ ., data = Carseats, subset = train, mtry = p, importance = TRUE)
+bag.mse = getTestMSE(bag.carseats)
+bag.mse
+```
+
+*Wow! It's a huge performance improvement. The test MSE obtained from baggging is much smaller than the test MSE from the pruned tree.*
+
+```{r}
+importance(bag.carseats)
+```
+
+*In terms of training MSE, the bagging model lists* **Price** *and* **ShelveLoc** *as the two most important predictors.* **Advertising** *and* **CompPrice** *are also considered important, but they don't impact the training MSE as much. Recall that the fully grown tree also considered* **Price** *and* **ShelveLoc** *to be the most important factors in predicting* **Sales**.
+
+(e) Use random forests to analyze this data. What test MSE do you obtain? Use the **importance()** function to determine which variables are most important. Describe the effect of *m*, the number of variables considered at each split, on the error rate obtained.
+
+
+```{r}
+set.seed(1)
+
+# First we'll use m = p/2
+m = p/2
+rf.carseats = randomForest(Sales ~ ., data = Carseats, subset = train, mtry = m, importance = TRUE)
+rf.mse = getTestMSE(rf.carseats)
+rf.mse
+```
+
+*Random forests with* $m = p/2$ *doesn't yield quite as low a test MSE as bagging, but it is still a significant improvement over the full tree and pruned tree test MSE.*
+
+```{r}
+importance(rf.carseats)
+```
+
+*Nothing too different about the order of predictor importance. It may be worth noting that the predictors which were considered much more important in the bagging model are a bit closer in importance to the other predictors.*
+
+```{r}
+set.seed(1)
+
+# Now we'll try m = sqrt(p)
+m = sqrt(p)
+rf.carseats = randomForest(Sales ~ ., data = Carseats, subset = train, mtry = m, importance = TRUE)
+rf.mse = getTestMSE(rf.carseats)
+rf.mse
+```
+
+*Random forests with* $m = \sqrt{p}$ *yields a test MSE similar to the pruned tree test MSE - not great.*
+
+```{r}
+importance(rf.carseats)
+```
+
+*The importance table yielded with* $m = \sqrt{p}$ *is similar to the one with* $m = p/2$ *with respect to predictor importance on training MSE. However, predictor importance has become even more "flat".*
+
+*Overall, random forests yielded the best performance on this data set. All of the models observed considered* **Price** *and* **ShelveLoc** *to be the best indicators of* **Sales**.
+
+---
+
+# Exercise 9
+
+This problem involves the **OJ** data set, which is part of the **ISLR** package.
+
+(a) Create a training set containing a random sample of 800 observations and a test set containing the remaining observations.
+
+
+```{r}
+set.seed(1)
+train = sample(nrow(OJ), 800)
+```
+
+(b) Fit a tree to the training data, with **Purchase** as the response and the other variables as predictors. Use the **summary()** function to produce summary statistics about the tree, and describe the results obtained.
+
+
+```{r}
+tree.model = tree(Purchase ~ ., data = OJ, subset = train)
+summary(tree.model)
+```
+
+*The resulting tree has 8 terminal nodes and only uses 4 predictors from the data set, which has 17 available predictors to use. The training misclassification error rate was 0.165.*
+
+(c) Type in the name of the tree object in order to get a detailed text output. Pick one of the terminal nodes and interpret the information displayed.
+
+
+```{r}
+tree.model
+```
+
+*Let's look at terminal node (8). The predictor region defined by this terminal node encompasses 57 of the original 800 training observations, which is 7.125%. This region is defined by* **LoyalCH** < 0.0356415 *(the conditions for branches leading to this terminal node all happened to be checking for* **LoyalCH** *less than a certain value as well). The model predicts any observations meeting that criteria to have a response value of* **MM** *(indicating a purchase of Minute Maid orange juice). 98.246% of the training observations in this region had a response value of* **MM**.
+
+(d) Create a plot of the tree and interpret the results.
+
+
+```{r}
+plot(tree.model)
+text(tree.model, pretty = 0)
+```
+
+*Again, we see that we have 8 terminal nodes, 3 of which correspond to a prediction of* **MM**. **LoyalCH** *is considered to be the most important predictor in determining* **Purchase**.
+
+(e) Predict the response on the test data and produce a confusion matrix comparing the test labels to the predicted test labels. What is the test error rate?
+
+
+```{r}
+tree.prob = predict(tree.model, newdata = OJ[-train,])
+tree.predict = rep('MM', nrow(tree.prob))
+tree.predict[tree.prob[, 'CH'] >= .5] = 'CH'
+table(tree.predict, OJ[-train, 'Purchase'])
+```
+
+```{r}
+tree.testError = (12 + 62) / length(tree.predict)
+tree.testError
+```
+
+*The full grown tree yields a test error rate of* 27.4%.
+
+(f) Apply the **cv.tree()** function to the training set in order to determine the optimal tree size.
+
+
+```{r}
+set.seed(1)
+cv.model = cv.tree(tree.model, FUN = prune.misclass)
+cv.model
+```
+
+(g) Produce a plot with tree size on the *x*-axis and cross-validated classification error rate on the *y*-axis.
+
+
+```{r}
+plot(cv.model$size, cv.model$dev, xlab = "Tree Size", ylab = "Cross-validated Error Rate")
+```
+
+(h) Which tree size corresponds to the lowest cross-validated classification error rate?
+
+
+*Both 5 and 8 terminal nodes yield the lowest CV error rate. We'll look at pruning the tree to 5 terminal nodes, since we already examined the full tree with 8 terminal nodes.*
+
+(i) Produce a pruned tree corresponding to the optimal tree size obtained using cross-validation. If cross-validation does not lead to selection of a pruned tree, then create a pruned tree with five terminal nodes.
+
+
+```{r}
+prune.model = prune.misclass(tree.model, best = 5)
+plot(prune.model)
+text(prune.model, pretty = 0)
+```
+
+(j) Compare the training error rates between the pruned and unpruned trees. Which is higher?
+
+
+```{r}
+summary(prune.model)
+```
+
+*The training error rate for the pruned tree is 16.5%, which is exactly the same as the training error rate observed with the full tree.*
+
+(k) Compare the test error rates between the pruned and unpruned trees. Which is higher?
+
+
+```{r}
+prune.prob = predict(prune.model, newdata = OJ[-train,])
+prune.predict = rep('MM', nrow(prune.prob))
+prune.predict[prune.prob[, 'CH'] >= .5] = 'CH'
+prune.testError = mean(prune.predict != OJ[-train, "Purchase"])
+
+tree.testError
+prune.testError
+```
+
+*The pruned tree has a test error rate of* 22.6%, *which is a bit lower than the full tree test error rate.*
+
+---
+
+# Exercise 10
+
+We now use boosting to predict **Salary** in the **Hitters** data set.
+
+(a) Remove the observations for which the salary information is unknown and then log-transform the salaries.
+
+
+```{r}
+Hitters = Hitters[complete.cases(Hitters$Salary),]
+Hitters$Salary.log = log(Hitters$Salary)
+```
+
+(b) Create a training set consisting of the first 200 observations and a test set consisting of the remaining observations.
+
+
+```{r}
+train = 1:200
+```
+
+(c) Perform boosting on the training set with 1,000 trees for a range of values of the shrinkage parameter $\lambda$. Produce a plot with different shrinkage values on the *x*-axis and the corresponding training set MSE on the *y*-axis.
+
+
+```{r}
+# need to gbm library to perform boosting
+library(gbm)
+
+# According to the book, typical values are 0.01 or 0.001, so we'll use that as a starting point
+shrinkage.values = c(0.01, 0.001, 0.1, 0.005, 0.05)
+test.mse = rep(NA, length(shrinkage.values))
+training.mse = rep(NA, length(shrinkage.values))
+
+for (index in 1:length(shrinkage.values)){
+  boost.model = gbm(Salary.log ~ . - Salary, data = Hitters[train,], distribution = "gaussian", n.trees = 1000, shrinkage = shrinkage.values[index])
+  boost.predict = predict(boost.model, newdata = Hitters[-train,], n.trees = 1000)
+  test.mse[index] = mean((Hitters[-train, "Salary.log"] - boost.predict)^2)
+  training.mse[index] = mean(boost.model$train.error^2)
+}
+```
+
+```{r}
+plot(shrinkage.values, training.mse, xlab = 'Shrinkage Value', ylab = 'Training MSE', main = 'Using Boosting to Predict Salary')
+```
+
+*And of course, the largest shrinkage value produces the smallest training MSE due to the boosting algorithm, which focusing on minimizing residuals.*
+
+(d) Produce a plot with different shrinkage values on the *x*-axis and the corresponding test set MSE on the *y*-axis.
+
+
+```{r}
+plot(shrinkage.values, test.mse, xlab = 'Shrinkage Value', ylab = 'Test MSE', main = 'Using Boosting to Predict Salary')
+```
+
+*The boosting model using* $\lambda = 0.05$ *was by far the best in terms of test MSE.*
+
+(e) Compare the test MSE of boosting to the test MSE that results from applying two of the regression approaches seen in Chapters 3 and 6.
+
+
+```{r}
+best.index = which.min(test.mse)
+best.shrinkage = shrinkage.values[best.index]
+best.mse = test.mse[best.index]
+best.shrinkage
+best.mse
+```
+
+*Boosting yields a test MSE of 0.259.*
+
+```{r}
+# In Chapter 3, we looked at linear regression, so we'll just do a multiple linear regression on the transformed Salary data
+lm.fit = lm(Salary.log ~ . - Salary, data = Hitters, subset = train)
+lm.predict = predict(lm.fit, newdata = Hitters[-train,])
+lm.mse = mean((Hitters[-train, "Salary.log"] - lm.predict)^2)
+lm.mse
+```
+
+*The multiple linear regression yields a test MSE of 0.492, which is almost double that of the boosting model.*
+
+```{r}
+# In Chapter 6, we looked at a number of methods, including Best Subset Selection, Ridge Regression, Lasso, PCR, and PLS
+# For this exercise, we'll utilize Best Subset Selection, which requires the leaps library
+library(leaps)
+
+# Number of predictors; -2 for Salary and Salary.log columns
+p = ncol(Hitters) - 2
+
+# We need a matrix to get response predictions from the best subset method, because there is no predict method for regsubsets
+test.mat = model.matrix(Salary.log ~ . - Salary, data = Hitters[-train,])
+
+# Find which subset yields the lowest test MSE and roll with that one
+regfit.best = regsubsets(Salary.log ~ . - Salary, data = Hitters[train,], nvmax = p)
+best.mse = Inf
+for (i in 1:p){
+  coefi = coef(regfit.best, id = i)
+  pred = test.mat[,names(coefi)]%*%coefi
+  this.mse = mean((Hitters[-train, "Salary.log"] - pred)^2)
+  if (this.mse < best.mse){
+    best.mse = this.mse
+    best.coef = coefi
+  }
+}
+
+length(best.coef)
+best.coef
+best.mse
+```
+
+*The best subset selection yields an 8 predictor model (not counting the intercept) with a test MSE of 0.468, which is only slightly better than the full multiple linear regression. It is still much worse than the test MSE from boosting.*
+
+(f) Which variables appear to be the most important predictors in the boosted model?
+
+
+```{r}
+summary(boost.model)
+```
+
+*In the boosted model, the number of times at bat during a career* (**CAtBat**) *had far and away the greatest relative influence on a player's salary. The second most influential predictor, the number of runs during a career* (**CRuns**), *had only half as much relative influence on a player's salary.*
+
+(g) Now apply bagging to the training set. What is the test set MSE for this approach?
+
+
+```{r}
+set.seed(1)
+bag.model = randomForest(Salary.log ~ . - Salary, data = Hitters, subset = train, mtry = p, importance = T)
+bag.predict = predict(bag.model, newdata = Hitters[-train,])
+bag.mse = mean((Hitters[-train, "Salary.log"] - bag.predict)^2)
+bag.mse
+```
+
+*The bagging approach yields a test MSE of 0.230, which is a bit less than the boost test MSE. Out of all the techniques we applied to this data set, the bagging has yielded the lowest test MSE.*
+
+---
+
+# Exercise 11
+
+This question uses the **Caravan** data set.
+
+(a) Create a training set consisting of the first 1,000 observations and a test set consisting of the remaining observations.
+
+```{r}
+train = 1:1000
+
+# Convert the Purchase response to a factor
+Caravan$Purchase.factor = ifelse(Caravan$Purchase == "Yes", 1, 0)
+```
+
+(b) Fit a boosting model to the training set with **Purchase** as the response and the other variables as predictors. Use 1,000 trees and a shrinkage value of 0.01. Which predictors appear to be the most important?
+
+```{r}
+set.seed(1)
+boost.model = gbm(Purchase.factor ~ . - Purchase, data = Caravan[train,], distribution = "bernoulli", n.trees = 1000, shrinkage = 0.01)
+summary(boost.model)
+```
+
+*There are 85 predictors in this data set, but the* **PPERSAUT** *is deemed to be much more important than the others. The next most important predictors are* **MKOOPKLA** *and* **MOPLHOOG**.
+
+(c) Use the boosting model to predict the response on the test data. Predict that a person will make a purchase if the estimated probability of purchase is greater than 20%. Form a confusion matrix. What fraction of the people predicted to make a purchase do in fact make one? How does this compare with the results obtained from applying KNN or logistic regression to this data set?
+
+```{r}
+boost.prob = predict(boost.model, newdata = Caravan[-train,], n.trees = 1000, type = "response")
+boost.predict = ifelse(boost.prob > .20, "Yes", "No")
+table(boost.predict, Caravan[-train, "Purchase"])
+```
+
+```{r}
+33 / (123 + 33)
+```
+
+*21.15% of people predicted to make a purchase actually do make one.*
+
+```{r}
+# use KNN, which is part of the class library, to predict purchase
+library(class)
+
+# Need to set a seed for consistency because knn() uses a random choice to settle ties
+set.seed(1)
+
+# the knn function requires the input to be a matrix, which should be standardized
+standardized.mat = scale(subset(Caravan, select = -c(Purchase, Purchase.factor)))
+train.mat = standardized.mat[train,]
+test.mat = standardized.mat[-train,]
+
+# We'll consider a range of K values, from 1 to the sqrt(n), with n being the number of observations in the training set
+best.rate = 0
+for (k in 1:floor(sqrt(length(train)))){
+  knn.pred = knn(train.mat, test.mat, Caravan[train, "Purchase"], k = k)
+  this.table = table(knn.pred, Caravan[-train, "Purchase"])
+  this.rate = this.table["Yes", "Yes"] / sum(this.table["Yes",])
+  if (!is.na(this.rate) & (this.rate > best.rate)){
+    best.rate = this.rate
+    best.table = this.table
+    best.k = k
+  }
+}
+
+best.table
+best.k
+best.rate
+```
+
+*KNN was able correct about 27.78% of the test observations predicted to make a purchase. This percentage was yielded by a KNN with k = 5 and is significantly higher than the boosting model, but there are also much fewer test observations that are predicted to make a purchase. Note that we are not using a 20% probability threshold here; I don't believe that makes as much sense using KNN in R. You could make a prediction of purchase if more than 20% of the K nearest neighbors are predicted to make a purchase, but I do not believe that is convenient to implement in R, so I won't.*
+
+```{r}
+# use logistic regression to predict purchase
+glm.model = glm(Purchase.factor ~ . - Purchase, data = Caravan, subset = train, family = binomial)
+glm.prob = predict(glm.model, newdata = Caravan[-train,], type = "response")
+glm.pred = ifelse(glm.prob > .20, "Yes", "No")
+table(glm.pred, Caravan[-train, "Purchase"])
+```
+
+```{r}
+58 / (350 + 58)
+```
+
+*Only 14.22% of the test observations predicted to make a purchase actually did. This percentage is much lower than boosting. It did actually predict much more of the test observations to make a purchase, and we were able to easily implement the 20% threshold in the logistic regression.*
+
+---
+
+# Exercise 12
+
+Apply boosting, bagging, and random forests to a data set of your choice. Be sure to fit the models on a training set and to evaluate their performance on a test set. How accurate are the results compared to simple methods like linear or logistic regression? Which of these approaches yields the best performance?
+
+```{r}
+# We'll work with the airquality data set from the datasets package
+library(datasets)
+
+# drop any NaNs
+airquality = airquality[complete.cases(airquality),]
+names(airquality)
+dim(airquality)
+```
+
+```{r}
+# We'll create models to predict the maximum daily temperature in degrees Farenheit (Temp)
+
+# Number of observations
+n = nrow(airquality)
+
+# Number of predictors
+p = ncol(airquality) - 1
+
+# First, split the data into a training set and a test set
+set.seed(1)
+train = sample(n, n/2)
+
+# Create a data frame to store test MSE results for each model
+df = data.frame(model.name = rep(NA, 5), test.mse = rep(NA, 5))
+```
+
+```{r}
+# Create the boosting model
+df[1, "model.name"] = "boosting"
+boost.model = gbm(Temp ~ ., data = airquality[train,], distribution = "gaussian", n.trees = 1000)
+boost.predict = predict(boost.model, newdata = airquality[-train,], n.trees = 1000)
+boost.mse = mean((airquality[-train, "Temp"] - boost.predict)^2)
+df[1, "test.mse"] = boost.mse
+```
+
+```{r}
+# Create the bagging model
+set.seed(1)
+df[2, "model.name"] = "bagging"
+bag.model = randomForest(Temp ~ ., data = airquality, subset = train, mtry = p, importance = T)
+bag.predict = predict(bag.model, newdata = airquality[-train,])
+bag.mse = mean((airquality[-train, "Temp"] - bag.predict)^2)
+df[2, "test.mse"] = bag.mse
+```
+
+```{r}
+# Create the random forests model
+set.seed(1)
+df[3, "model.name"] = "random forests"
+rf.model = randomForest(Temp ~ ., data = airquality, subset = train, mtry = p/2, importance = T)
+rf.predict = predict(rf.model, newdata = airquality[-train,])
+rf.mse = mean((airquality[-train, "Temp"] - rf.predict)^2)
+df[3, "test.mse"] = rf.mse
+```
+
+```{r}
+# Create the multiple linear regression model
+df[4, "model.name"] = "linear regression"
+lm.model = lm(Temp ~ ., data = airquality, subset = train)
+lm.predict = predict(lm.model, newdata = airquality[-train,])
+lm.mse = mean((airquality[-train, "Temp"] - lm.predict)^2)
+df[4, "test.mse"] = lm.mse
+```
+
+```{r}
+# Logistic regression is specific to qualitative response variables, but we can perform a log transformation on Temp and fit a linear regression on that
+df[5, "model.name"] = "log transform regression"
+log.model = lm(log(Temp) ~ ., data = airquality, subset = train)
+log.predict = exp(predict(log.model, newdata = airquality[-train,]))
+log.mse = mean((airquality[-train, "Temp"] - log.predict)^2)
+df[5, "test.mse"] = log.mse
+```
+
+```{r}
+# Show the results
+df
+```
+
+*We can see that the random forests model performed better than any of the other models. It had a much lower test MSE than the linear regression and the log transform regression models. The bagging model had a test MSE which was very close to that of the random forests model. The boosting model performed very poorly on this data set compared to the other models.*

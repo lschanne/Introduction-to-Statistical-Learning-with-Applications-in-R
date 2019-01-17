@@ -1,0 +1,307 @@
+---
+title: "2.4 Exercises"
+author: "Luke Schanne"
+output:
+    html_document:
+      toc: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+***
+# Exercise 8
+
+This exercise relates to the **College** data set, which can be found in the file **College.csv**. It contains a number of variables for 777 different universities and colleges in the US. The variables are:
+
+- **Private**: Public/private indicator
+- **Apps**: Number of applications received
+- **Accept**: Number of new students enrolled
+- **Top10perc**: New students from top 10% of high school class
+- **Top25perc**: New students from top 25% of high school class
+- **F.Undergrad**: Number of full-time undergraduates
+- **P.Undergrad**: Number of part-time undergraduates
+- **Outstate**: Out-of-state tuition
+- **Room.Board**: Room and board costs
+- **Books**: Estimated book costs
+- **Personal**: Estimated personal spending
+- **PhD**: Percent of faculty with Ph.D.'s
+- **Terminal**: Percent of faculty with terminal degree
+- **S.F.Ratio**: Student/faculty ratio
+- **perc.alumni**: Percent of alumni who donate
+- **Expend**: Instructional expenditure per student
+- **Grad.Rate**: Graduation rate
+
+Before reading the data into R, it can be viewed in Excel or a text editor.
+
+(a) Use the **read.csv()** function to read the data into R. Call the loaded data **college**. Make sure that you have the directory set to the correct location for the data.
+```{r}
+fh='D:\\GoogleDrive\\Introduction to Statistical Learning with Applications in R\\data-sets\\College.csv'
+college = read.csv(file=fh,header=TRUE)
+```
+(b) Look at the data using the **fix()** function. You should notice that the first column is just the name of each university. We don't really want R to treat this as data. However, it may be handy to have these names for later. Try the following commands:
+
+```
+> rownames(college)=college[,1]
+> fix(college)
+```
+
+You should see that there is now a **row.names** column with the name of each university recorded. This means that R has given each row a name corresponding to the appropriate university. R will not try to perform calculations on the row names. However, we still need to elimnate the first colum in the data where the names are stored. Try
+
+```
+> college=college[,-1]
+> fix(college)
+```
+
+Now you should see that the first data column is **Private**. Note that another column labeled **row.names** now apperas before the **Private** column. However, this is not a data column but rather teh name that R is giving to each row.
+
+```{r}
+rownames(college)=college[,1]
+college=college[,-1]
+fix(college)
+```
+
+(c)
+
+    (i) Use the **summary()** function to produce a numerical summary of the variables in the data set.
+    ```{r}
+    summary(college)
+    ```
+    (ii) Use the **pairs()** function to produce a scatterplot matrix of the first ten columns or variables of the data. Recall that you can reference the first ten columns of a matrix **A** using **A[,1:10]**.
+    ```{r}
+    pairs(college[,1:10])
+    ```
+    (iii) Use the **plot()** function to produce side-by-side boxplots of **Outstate** versus **Private**.
+    ```{r}
+    plot(x=college$Private, y=college$Outstate, xlab='Private', ylab='Out-of-state tuition', main='Out-of-state tution for public and private schools')
+    ```
+    (iv) Create a new qualitative variable, called **Elite**, by *binning* the **Top10perc** variable. We are going to divide universities into two groups based on whether or not the proportion of students coming from the top 10% of their high school classes exceeds 50%.
+    ```{r}
+    Elite=rep("No",nrow(college))
+    Elite[college$Top10perc>50]="Yes"
+    Elite=as.factor(Elite)
+    college=data.frame(college,Elite)
+    fix(college)
+    ```
+    Use the summary() function to see how many elite universities there are. Now use the **plot()** function to produce side-by-side boxplots of **Outstate** versus **Elite**.
+    ```{r}
+    summary(Elite)
+    ```
+    ```{r}
+    plot(x=Elite, y=college$Outstate, xlab='Elite School', ylab='Out-of-state-tuition', col='blue')
+    ```
+    (v) Use the **hist()** function to produce some histograms with diffeing numbers of bins for a few of the quantitative variables. You may find the command **par(mfrow=c(2,2))** useful: it will divide the print window into four regions so that four plots can be made simultaneously. Modifying the arguments to this function will divide the screen in other ways.
+    ```{r}
+    par(mfrow=c(2,2))
+    hist(x=college$Apps, xlab='Number of applications received', main='Application distribution', breaks=15)
+    hist(x=college$Accept, xlab='Number of applications accepted', main='Acceptance distribution', breaks=15)
+    hist(x=college$Enroll, xlab='Number of applications enrolled', main='Enrollment distribution', breaks=15)
+    hist(x=college$Grad.Rate, xlab='Graduation rate', main='Graduation distribution', breaks=15)
+    ```
+    (vi) Continue exploring the data, and provide a brief summary of what you discover.
+    ```{r}
+    acceptanceRatio = college$Accept / college$Apps
+    enrollmentRatio = college$Enroll / college$Apps
+    accLab = 'Application acceptance ratio'
+    enrLab = 'New student enrollment ratio'
+    graLab = 'Graduation rate'
+    par(mfrow=c(3,1))
+    plot(x=acceptanceRatio, y=enrollmentRatio, xlab=accLab, ylab=enrLab, main='Enrollment ratio vs. acceptance ratio')
+    plot(x=acceptanceRatio, y=college$Grad.Rate, xlab=accLab, ylab=graLab, main='Graduation rate vs. acceptance ratio')
+    plot(x=enrollmentRatio, y=college$Grad.Rate, xlab=enrLab, ylab=graLab, main='Graduation rate vs. enrollment ratio')
+    ```
+    
+    *These trends are surprising to me. I would have expected that enrollment ratio would be higher at more competitive schools (i.e. schools with a lower acceptance ratio), but the opposite seems to be true in this data. Also, I would have expected graduation rate to be lower at more competitive schools, but again the opposite seems to be true. There doesn't seem to be much of a trend with graduation rate vs. acceptance ratio.*
+
+***
+# Exercise 9
+
+This exercise involves the **Auto** data set studied in the lab. Make sure that the missing values have been removed from the data.
+```{r}
+fh = 'D:/GoogleDrive/Introduction to Statistical Learning with Applications in R/data-sets/Auto.csv'
+Auto = read.csv(file=fh, header=T, na.strings='?')
+Auto = na.omit(Auto)
+```
+(a) Which of the predictors are quantitative, and which are qualitative?
+```{r}
+summary(Auto)
+```
+```{r}
+pairs(Auto)
+```
+
+*Quantitative predictors: mpg, displacement, horsepower, weight, acceleration*
+*Qualitative predictors: cylinders, year, origin, name*
+
+(b) What is the *range* of each quantitative predictor? You can answer this using the **range()** function.
+```{r}
+quantFields = c('mpg', 'displacement', 'horsepower', 'weight', 'acceleration')
+for (field in quantFields){
+  x = range(Auto[[field]])
+  print(sprintf('%s range: %.0f - %.0f', field, x[1], x[2]))
+}
+
+```
+(c) What is the mean and standard deviation of each quantitative predictor?
+```{r}
+# Note that we already have these values from the summary produced above, but I assume the author
+# is looking for the mean and sd functions to be used here
+for (field in quantFields){
+  data = Auto[[field]]
+  print(sprintf('%s %s: %.2f', field, c('mean', 'std'), c(mean(data), sd(data))))
+}
+```
+(d) Now remove the 10th through 85th observations. What is the range, mean, and standard deviation of each predictor in the subset of the data that remains?
+```{r}
+# Note: you can't use the 10:85 shorthand combined with negative indexing to drop rows; you have to write out the call to the seq() function
+reducedAuto = Auto[-seq(10,85),]
+for (field in quantFields){
+  data = reducedAuto[[field]]
+  print(sprintf('%s %s: %.2f', field, c('mean', 'std'), c(mean(data), sd(data))))
+}
+```
+(e) Using the full data set, investigate the predictors graphically, using scatterplots or other tools of your choice. Create some plots highlighting the relationships among the predictors. Comment on your findings.
+```{r}
+cylinders = as.factor(Auto$cylinders)
+plot(x=cylinders, y=Auto$mpg, xlab='Number of cylinders', ylab='Miles per gallon', main='mpg vs. cylinders')
+```
+
+*From this data, it appears that 4 cylinders is ideal for maximizing the gas mileage of a car. Additional cylinders beyond 4 begin to drastically decrease the fuel efficiency of a car.*
+```{r}
+plot(x=Auto$mpg, y=Auto$displacement, xlab='Miles per gallon', ylab='Displacement', main='Displacement vs. mpg')
+```
+
+*Miles per gallon seems to increase exponentially as displacement decreases.*
+```{r}
+plot(x=Auto$mpg, y=Auto$horsepower, xlab='Miles per gallon', ylab='Horsepower', main='Horsepower vs. mpg')
+```
+
+*Horsepower seems to share a similar relationship to mpg as displacement does. (i.e. mpg tends to increase exponentially as horsepower decreases.)*
+```{r}
+plot(x=Auto$mpg, y=Auto$weight, xlab='Miles per gallon', ylab='Weight', main='Weight vs. mpg')
+```
+
+*Not surprisingly, fuel efficiency decreases exponentially as the weight of the car increases.*
+```{r}
+plot(x=Auto$mpg, y=Auto$acceleration, xlab='Miles per gallon', ylab='Acceleration', main='Acceleration vs. mpg')
+```
+```{r}
+cor(x=Auto$mpg, y=Auto$acceleration)
+```
+*Acceleration is not strongly correlated to the gas mileage of a car. Although there is not a definitive relationship here, the mpg does tend to increase as acceleration also increases.*
+```{r}
+year_mpg = aggregate(Auto[,1], list(year=Auto$year), mean)
+plot(x=year_mpg$year, y=year_mpg$mpg, xlab='Year', ylab='Average miles per gallon', main='Average mpg vs. year')
+```
+
+*The average fuel effiency of a car increases linearly as time goes by.*
+```{r}
+origin = as.factor(Auto$origin)
+plot(x=origin, y=Auto$mpg, xlab='Origin', ylab='Miles per gallon', main='mpg vs. origin')
+```
+
+*I don't understand what origin is supposed to be, but fuel efficiency seems to increase as origin goes from 1 to 2 to 3.*
+```{r}
+plot(x=Auto$name, y=Auto$mpg, xlab='Name', ylab='Miles per gallon', main='mpg vs. name')
+```
+
+*There are too many names to properly sort through them all, but some brands seem to be performing much better than others in terms of fuel efficiency.*
+(f) Suppose that we wish to predict gas mileage (**mpg**) on the basis of the other variables. Do your plots suggest that any of the other variables might be useful in predicting **mpg**? Justify your answer.
+*From the above plots, you can see that the number of cylinders, displacement, horsepower, weight, year, and origin of a car are all useful predictors for determining that cars mpg.*
+
+***
+# Exercise 10
+
+This exercise involves the **Boston** housing data set.
+
+(a) To begin, load in the **Boston** data set. The **Boston** data set is part of the **MASS** *library* in R.
+```{r}
+library(MASS)
+```
+Now the data set is contained in the object **Boston**.
+```{r}
+?Boston
+```
+How many rows are in this data set? How many columns? What do the rows and columns represent?
+```{r}
+dim(Boston)
+```
+*There are 506 observations and 14 predictors in each observation.*
+(b) Make some pairwise scatterplots of the predictors (columns) in this data set. Describe your findings.
+```{r}
+pairs(Boston)
+```
+(c) Are any of the predictors associated with per capita crime rate? If so, explain the relationship.
+```{r}
+plot(y=Boston$crim, x=Boston$zn, ylab='per capita crime rate', xlab='proportion of residential land zoned for lots over 25,000 sq.ft.', main='Crime rate vs. residential zoning')
+```
+
+*Almost of all the crime rate per capita is in towns with no proportion of residential land zoned for lots over 25,000 square feet.*
+```{r}
+plot(x=Boston$dis, y=Boston$crim, xlab='Weighted mean of distances to five Boston employment centres', ylab='Crime rate per capita', main='Crime rate vs. distance to employment centres')
+```
+
+*Much higher crime rate closer to the employment centres. The crime rate drastically decreases beyond 3-ish (miles maybe).*
+```{r}
+plot(x=Boston$ptratio, y=Boston$crim, xlab='Pupil-teacher ratio', ylab='Crime rate per capita', main='Crime rate vs. pupil-teacher ratio')
+```
+
+*Almost all of the towns with a significant crime rate have a pupil-teacher ratio of just over 20 students to each teacher. Although, there is also a suprising fluctuation in crime rate at just under 15:1 pupil-teacher ratio.*
+(d) Do any of the suburbs of Boston appear to have particularly high crime rates? Tax rates? Pupil-teacher ratios? Comment on the range of each predictor.
+```{r}
+hist(Boston$crim, breaks=25)
+```
+```{r}
+cols = c('crim', 'tax', 'ptratio')
+Boston[Boston$crim > 30, cols]
+```
+
+*All of the towns in this data set with crime rates of over 30 per capita a full-value property-tax rate of 666\$10,000 and a pupil-teacher ratio of 20.2:1.*
+```{r}
+for (c in cols) {
+  x = range(Boston[[c]])
+  print(sprintf('%s range: %.2f - %.2f', c, x[1], x[2]))
+}
+```
+
+*The values of crime rate, property-tax rate, and pupil-teacher ratio are all near their highest within the data set.*
+(e) How many of the suburbs in this data set bound the Charles river?
+```{r}
+summary(as.factor(Boston$chas))
+```
+
+*35 are bound by the Charles river. 471 are not.*
+(f) What is the median pupil-teacher ratio among the towns in this data set?
+```{r}
+median(Boston$ptratio)
+```
+(g) Which suburb of Boston has lowest median value of owner-occupied homes? What are the values of the other predictors for that suburb, and how do those values compare to the overall ranges for those predictors? Comment on your findings.
+```{r}
+Boston[which.min(Boston$medv),]
+```
+```{r}
+summary(Boston)
+```
+
+*The town with the lowest median value of owner-occupied homes is one of the 8 towns that has a crime rate over 30. Also, all of the owner-occupied units in the town were built prior to 1940, and it has the highest index of accessibility to radial highways, one of the smallest weighted mean distances to five Boston employment centres, and the higheset proportion of blacks. It is definitely part of the old city and centrally located within Boston.*
+(h) In this data set, how many of the suburbs average more than seven rooms per dwelling? More than eight rooms per dwelling? Comment on the suburbs that average more than eight rooms per dwelling.
+```{r}
+sum(Boston$rm > 7)
+```
+
+*There are 64 towns with more than 7 rooms per dwelling on average.*
+```{r}
+manyRooms = Boston[Boston$rm > 8,]
+fewRooms  = Boston[Boston$rm < 8,]
+nrow(manyRooms)
+```
+
+*There are 13 towns with more than 8 rooms per dwelling on average.*
+```{r}
+summary(manyRooms)
+```
+```{r}
+summary(fewRooms)
+```
+
+*In the towns with more than 8 average rooms per dwelling, there are smaller crime rates, less industrial zoning, a smaller lower status of the population, and a higher median value of owner-occupied homes.*

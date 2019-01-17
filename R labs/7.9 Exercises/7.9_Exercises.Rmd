@@ -1,0 +1,720 @@
+---
+title: "7.9 Exercises"
+output:
+  html_document:
+    toc: TRUE
+---
+
+# Exercise 6
+
+In this exercise, you will further analyze the **Wage** data set considered throughout this chapter.
+
+```{r}
+# Wage data is in the ISLR library
+library(ISLR)
+```
+
+
+(a) Perform polynomial regression to predict **wage** using **age**. Use cross-validation to select the optimal degree *d* for the polynomial. What degree was chose, and how does this compare to the results of hypothesis testing using ANOVA? Make a plot of the resulting polynomial fit to the data.
+
+```{r}
+# Set seed for repeatability
+set.seed(1)
+
+# glm() and cv.glm() for cross-validation are in das boot
+library(boot)
+
+# Explore up to the 10th degree polynomial
+maxDegree = 10
+# Use 10-fold cross-validation
+K = 10
+
+# Find the 10-fold cross-validation estimate for the test MSE for each polynomial model
+cv.error = rep(0, maxDegree)
+for (d in 1:maxDegree){
+  glm.fit = glm(wage ~ poly(age, d), data = Wage)
+  cv.error[d] = cv.glm(data = Wage, glmfit = glm.fit, K = K)$delta[1]
+}
+
+# Find the degree model which yields the lowest estimated test MSE
+bestDegree = which.min(cv.error)
+bestDegree
+```
+
+*According to our cross-validation, a quartic model should yield the best results for predicting* **wage** *via* **age**.
+
+```{r}
+plot(cv.error, xlab = 'Degree', ylab = 'Estimated Test MSE', main = '10-Fold CV Estimate for Test MSE for n-Degree Polynomial Fit', pch = 20, col = 'blue')
+points(bestDegree, cv.error[bestDegree], col = 'red', pch = 20)
+```
+
+*You can see that a higher degree model tends to yield a similar test MSE, but the quartic model has the lowest estimated test MSE and is easier to interpret than a higher degree model. It also has a lower variance.*
+
+```{r}
+# Use ANOVA to determine the best polynomial fit (up to 10)
+for (d in 2:maxDegree) {
+  print(paste('d = ', d))
+  print(anova(lm(wage ~ poly(age, d - 1), data = Wage), lm(wage ~ poly(age, d), data = Wage)))
+}
+```
+
+*The ANOVA analysis suggests that a cubic model should be sufficient.*
+
+```{r}
+cv.fit = lm(wage ~ poly(age, bestDegree), data = Wage)
+anova.fit = lm(wage ~ poly(age, 3), data = Wage)
+
+# Look at the estimated coefficients for the model yielded by CV
+cv.fit
+```
+
+```{r}
+anova.fit
+```
+
+*The $\hat{\beta_0}$, $\hat{\beta_1}$, $\hat{\beta_2}$, and $\hat{\beta_3}$ terms for the cubic and quartic models are almost identical. Of course, the quartic model has a non-zero $\hat{\beta_4}$ term that is rather significant.*
+
+```{r}
+# Plot the estimated models v. the actual values
+plot(Wage$age, Wage$wage, xlab = 'Age of Worker', ylab = 'Workers Raw Wage', main = 'Wage v. Age', col = 'grey', pch = 20)
+points(Wage$age, cv.fit$fitted.values, col = 'red', pch = 20)
+points(Wage$age, anova.fit$fitted.values, col = 'blue', pch = 20)
+legend('topright', legend = c('Actuals', 'CV Fit', 'ANOVA Fit'), col = c('grey', 'red', 'blue'), pch = 20)
+```
+
+*On the range of* **age** *in the training data, the cubic and quartic models have very similar predictions. We can see that the quartic fit, which was suggested by cross-validation, tends to experience a bit more variability at the edges of the ranges. With that in mind, I would suggest the cubic model, which was suggested by the ANOVA, as the better model. It will be more stable and is a simpler model, which should be preferred if the predictive performance is similar.*
+
+(b) Fit a step function to predict **wage** using **age**, and perform cross-validation to choose the optimal number of cuts. Make a plot of the fit obtained.
+
+```{r}
+# Look at 2 cuts to 10 cuts to see which performs best (1 cut is just an intercept-only model)
+maxCuts = 10
+
+# Use 10-fold CV for comparison
+K = 10
+set.seed(1)
+cv.error = rep(0, maxCuts - 1)
+for (numCuts in 2:maxCuts) {
+  Wage$ageCuts = cut(Wage$age, numCuts)
+  glm.fit = glm(wage ~ ageCuts, data = Wage)
+  cv.error[numCuts - 1] = cv.glm(Wage, glm.fit, K = K)$delta[1]
+}
+
+bestCuts = which.min(cv.error) + 1
+bestCuts
+```
+
+*The cross-validation suggests that 8 cuts yields the best step function model.*
+
+```{r}
+plot(2:maxCuts, cv.error, xlab = 'Number of Cuts', ylab = 'CV Error', main = 'CV Error v. Number of Cuts', col = 'red')
+points(bestCuts, cv.error[bestCuts - 1], col = 'blue')
+```
+
+*Visually, we can see that 8 cuts does perform decently better than any other number of cuts.*
+
+```{r}
+cuts.fit = lm(wage ~ cut(age, bestCuts), data = Wage)
+plot(Wage$age, Wage$wage, xlab = 'Age of Worker', ylab = 'Workers Raw Wage', main = 'Wage v. Age', col = 'grey', pch = 20)
+points(Wage$age, cuts.fit$fitted.values, col = 'blue', pch = 20)
+legend('topright', legend = c('Actuals', paste(bestCuts, ' Cut Predictions')), col = c('grey', 'blue'), pch = 20)
+```
+
+*And here we have our estimated model with 8 cuts, looking nice and pretty. Notice that the middle 4 cuts have very little deviation. We could probably switch to a model with fewer cuts if we did not place our cuts uniformly.*
+
+---
+
+# Exercise 7
+
+The **Wage** data set contains a number of other features not explored in this chapter, such as marital status (**maritl**), job class (**jobclass**), and others. Explore the relationships between some of these other predictors and **wage**, and use non-linear fitting techniques in order to fit flexible models to the data. Create plots of the results obtained and write a summary of your findings.
+
+```{r}
+# First, we'll look at predicting wage via marital status
+# For a single qualitative predictor, an lm() fit is already a step function
+step.fit = lm(wage ~ maritl, data = Wage)
+plot(Wage$maritl, Wage$wage, col = 'black', xlab = 'Marital Status', ylab = 'Wage')
+points(Wage$maritl, step.fit$fitted.values, col = 'blue', pch = 20)
+```
+
+*If we use all of the training data and only the Marital Status as a predictor, then of course the resulting step fit simply predicts the mean value of the training data at that level of marital status.*
+
+```{r}
+mean((Wage$wage - step.fit$fitted.values)^2)
+```
+
+*This simple model is very easy to interpet. It also yields an MSE of 1619.647. Let's see how that compares to some other models.*
+
+```{r}
+# Let's look at predicting wage via job class
+# Since job class is also a qualitative predictor, we will look at the same simple step model
+step.fit = lm(wage ~ jobclass, data = Wage)
+plot(Wage$jobclass, Wage$wage, col = 'black', xlab = 'Job Class', ylab = 'Wage')
+points(Wage$jobclass, step.fit$fitted.values, col = 'blue', pch = 20)
+```
+
+```{r}
+mean((Wage$wage - step.fit$fitted.values)^2)
+```
+
+*This model, using an essentially binary fit to predict wage, is even more simple than the step function using marital status. It also has a slightly higher MSE at 1666.182.*
+
+```{r}
+# Now let's look at what happens when we use a step model with both predictors
+step.fit = lm(wage ~ maritl + jobclass, data = Wage)
+summary(step.fit)
+mean((Wage$wage - step.fit$fitted.values)^2)
+```
+
+*Using what is now essentially a step model with 10 different sections, we have a lower MSE at 1551.584. We would of course expect our MSE to decrease as we increase the model flexibility since we have only looked at training MSE thusfar.*
+
+*Let's compare this 2-predictor step model with our step model using 8 cuts with the age predictor. We'll just do a quick comparison by splitting the data in half. We will fit both models with one half and compare their test MSEs from the other half.*
+
+```{r}
+set.seed(1)
+train = sample(nrow(Wage), nrow(Wage)/2)
+fit1 = lm(wage ~ cut(age, 8), data = Wage, subset = train)
+fit2 = lm(wage ~ maritl + jobclass, data = Wage, subset = train)
+getMSE = function(fit, newdata){
+  pred = predict(fit, newdata)
+  return(mean((fit$model$wage - pred)^2))
+}
+getMSE(fit1, Wage[-train,])
+getMSE(fit2, Wage[-train,])
+```
+
+*Based on this quick test, we can see some evidence that the old 8-cut step model using only the age predictor may be better at predicting wage than this new model using both marital status and job class predictors.*
+
+---
+
+# Exercise 8
+
+Fit some of the non-linear models investigated in this chapter to the **Auto** data set. Is there evidence for non-linear relationships in this data set? Create some informative plots to justify your answer.
+
+```{r}
+# First, let's check out the pair plots
+pairs(Auto)
+```
+
+*Looking quickly at these plots, it seems like* **mpg** *and* **displacement**, **mpg** *and* **horsepower**, **mpg** *and* **weight**, *and* **horsepower** *and* **acceleration** *may have non-linear relationships.*
+
+```{r}
+# Let's look at mpg and displacement
+plot(Auto$mpg, Auto$displacement, xlab = 'miles per gallon', ylab = 'Engine displacement (cu. inches)')
+```
+
+*Let's try out a quadratic, a natural spline, and a step function fit to see what works best. We'll do a 10-fold CV on each one and look at CV error as our comparison metric.*
+
+```{r}
+# Get qudaratic fit estimated error
+nFolds = 10
+set.seed(1)
+quadratic.fit = glm(displacement ~ poly(mpg, 2), data = Auto)
+quadratic.error = cv.glm(Auto, quadratic.fit, K = nFolds)$delta[1]
+quadratic.error
+```
+
+*The 10-fold CV estimated error is 2484.04 for the quadratic fit.*
+
+```{r}
+# Use CV to determine the best degrees of freedom (up to 10) for a natural spline and what the associated CV error is
+library(splines)
+set.seed(1)
+spline.error = Inf
+max.df = 10
+for (this.df in 1:max.df){
+  this.fit = glm(displacement ~ ns(mpg, df = this.df), data = Auto)
+  this.error = cv.glm(Auto, this.fit, K = nFolds)$delta[1]
+  if (this.error < spline.error){
+    spline.error = this.error
+    spline.fit = this.fit
+    spline.df = this.df
+  }
+}
+spline.df
+spline.error
+```
+
+*The 10-fold CV estimated error is 2192.551 for the natural spline with 7 degrees of freedom.*
+
+```{r}
+# Use CV to determine the best number of cuts for a step function, along with the associated error
+set.seed(1)
+step.error = Inf
+for (these.cuts in 2:15) {
+  Auto$mpg.cuts = cut(Auto$mpg, these.cuts)
+  this.fit = glm(displacement ~ mpg.cuts, data = Auto)
+  this.error = cv.glm(Auto, this.fit, K = nFolds)$delta[1]
+  if (this.error < step.error){
+    step.error = this.error
+    step.fit = this.fit
+    step.cuts = these.cuts
+  }
+}
+step.cuts
+step.error
+```
+
+*The 10-fold CV estimated error is 2372.634 for the step function with 13 cuts.*
+
+*Based on our cross-validation results, the natural spline best represents the relationship between miles per gallon and engine displacement. Let's plot the models together.*
+
+```{r}
+plot(Auto$mpg, Auto$displacement, xlab = 'miles per gallon', ylab = 'Engine displacement (cu. inches)', main = 'Displacement v. Miles Per Gallon', col = 'grey', pch = 20)
+points(Auto$mpg, quadratic.fit$fitted.values, col = 'blue', pch = 20)
+points(Auto$mpg, spline.fit$fitted.values, col = 'red', pch = 20)
+points(Auto$mpg, step.fit$fitted.values, col = 'green', pch = 20)
+legend('topright', c('Data', 'Quadratic', 'Natural Spline', 'Step Function'), col = c('grey', 'blue', 'red', 'green'), pch = 20)
+```
+
+*So here we have our 3 models plotted together with the training data. Looking at the plot, it appears that the quadratic model is actually quite good until the upper range of mpg. We could probably get a spline fit with less degrees of freedom to perform quite well if we played around the setting the boundaries manually.*
+
+---
+
+# Exercise 9
+
+This question uses the variable **dis** (the weighted mean of distances to five Boston employment centers) and **nox** (nitrogen oxides concentration in parts 10 million) from the **Boston** data. We will treat **dis** as the predictor and **nox** as the response.
+
+```{r}
+# The Boston data is in the MASS library
+library(MASS)
+```
+
+(a) Use the **poly()** function to fit a cubic polynomial regression to predict **nox** using **dis**. Report the regression output and plot the resulting data and polynomial fits.
+
+```{r}
+cubic.fit = lm(nox ~ poly(dis, 3), data = Boston)
+coef(cubic.fit)
+```
+
+*The cubic fit produces the following model:* $nox = -0.3180490 dis^3 + 0.8563300 dis^2 - 2.0030959 dis + 0.5546951$
+
+```{r}
+plot(Boston$dis, Boston$nox, xlab = 'Weighted mean of distances to five Boston employment centres', ylab = 'Nitrogen oxides concentration (parts per 10 million)', col = 'grey', pch = 20)
+x = seq(from = min(Boston$dis), to = max(Boston$dis), length.out = 500)
+y = predict(cubic.fit, data.frame(dis = x))
+lines(x, y, col = 'blue')
+```
+
+(b) Plot the polynomial fits for a range of different polynomial degrees (say, from 1 to 10) and report the associated residual sum of squares.
+
+```{r}
+max.degree = 10
+rss = rep(0, max.degree)
+legend.labels = c('data')
+legend.colors = c('grey', '#3300CC', '#CC00FF', '#FF0033', '#000000', '#CCCCCC', '#33FF00', '#999000', '#FF9933', '#00FFFF', '#0033FF')
+plot(Boston$dis, Boston$nox, xlab = 'Weighted mean of distances to five Boston employment centres', ylab = 'Nitrogen oxides concentration (parts per 10 million)', main = 'Polynomial Fits', col = legend.colors[1], pch = 20)
+for (d in 1:max.degree){
+  this.fit = lm(nox ~ poly(dis, d), data = Boston)
+  legend.labels = cbind(legend.labels, c(paste(d, ' degree fit')))
+  rss[d] = sum(this.fit$residuals^2)
+  y = predict(this.fit, data.frame(dis = x))
+  lines(x, y, col = legend.colors[d + 1])
+}
+legend('topright', legend = legend.labels, col = legend.colors, pch = 20)
+```
+
+```{r}
+plot(rss, xlab = 'Degree of Polynomial', ylab = 'Residual Sum of Squares')
+```
+
+```{r}
+rss
+which.min(rss)
+```
+
+*Of course, since rss is always going to favor a more flexible model, we see the rss decreasing monotonically. However, we definitely seem some diminishing returns after about the 3rd degree.*
+
+(c) Use the **bs()** function to fit a regression spline to predict **nox** using **dis**. Report the output for the fit using four degrees of freedom. How did you choose the knots? Plot the resulting fit.
+
+```{r}
+# Let's just choose uniformly distributed knots
+spline.fit = lm(nox ~ bs(dis, df = 4, degree = 3), data = Boston)
+plot(Boston$dis, Boston$nox, xlab = 'Weighted mean of distances to five Boston employment centres', ylab = 'Nitrogen oxides concentration (parts per 10 million)', main = 'Spline Fit', col = 'grey', pch = 20)
+points(Boston$dis, spline.fit$fitted.values, col = 'blue', pch = 20)
+legend('topright', legend = c('data', 'spline fit'), col = c('grey', 'blue'), pch = 20)
+```
+
+```{r}
+sum(spline.fit$residuals^2)
+```
+
+*The RSS for the spline with 4 degrees of freedom is 1.922775, which is between the RSS values of the quartic and quintic polynomial fits.*
+
+(e) Now fit a regression spline for a range of degrees of freedom and plot the resulting fits and report the resulting RSS. Describe the results obtained.
+
+```{r}
+max.df = 10
+min.df = 3
+rss = rep(0, max.df - min.df)
+for (df in min.df:max.df){
+  this.fit = lm(nox ~ bs(dis, df = df, degree = 3), data = Boston)
+  rss[df - min.df + 1] = sum(this.fit$residuals^2)
+}
+
+plot(min.df:max.df, rss, xlab = 'Degrees of Freedom', ylab = 'Residual Sum of Squares')
+```
+
+```{r}
+rss
+```
+
+*Again, since RSS will always decrease as flexibility increases, we see a monotonic decrease. After 5 degrees of freedom, the RSS doesn't decrease as much.*
+
+(f) Perform cross-validation or another approach in order to select the best degrees of freedom for a regression spline on this data. Describe your results.
+
+```{r}
+min.error = Inf
+best.df = 0
+
+set.seed(1)
+for (df in min.df:max.df){
+  this.fit = glm(nox ~ bs(dis, df = df, degree = 3), data = Boston)
+  this.error = cv.glm(Boston, this.fit, K = 10)$delta[1]
+  if (this.error < min.error){
+    min.error = this.error
+    best.df = df
+  }
+}
+
+best.df
+```
+
+*Our 10-fold CV has selected 6 degrees of freedom to be the best for this data set. This selection is not very surprising, since we saw that after about 5 degrees of freedom, you're really not getting much of a better fit on the training data. Therefore, any further flexibility added will probably only fit on noise.*
+
+```{r}
+plot(Boston$dis, Boston$nox, xlab = 'Weighted mean of distances to five Boston employment centres', ylab = 'Nitrogen oxides concentration (parts per 10 million)', main = paste('Spline Fit with', best.df, 'degrees of freedom'), col = 'grey', pch = 20)
+points(Boston$dis, lm(nox ~ bs(dis, df = best.df, degree = 3), data = Boston)$fitted.values, col = 'blue', pch = 20)
+legend('topright', legend = c('data', 'spline fit'), col = c('grey', 'blue'), pch = 20)
+```
+
+---
+
+# Exercise 10
+
+This question relates to the **College** data set.
+
+(a) Split the data into a training set and a test set. Using out-of-state tuition as the response and the other variables as the predictors, perform forward stepwise selection on the training set in order to identify a statisfactory model that uses just a subset of the predictors.
+
+```{r}
+# Create a training set sample
+set.seed(1)
+train = sample(1:nrow(College), nrow(College)/2)
+```
+
+
+```{r}
+# Perform forward stepwise selection on training set
+library(leaps)
+forward.fit = regsubsets(Outstate ~ ., data = College, subset = train, nvmax = ncol(College) - 1, method = 'forward')
+
+# Plot the training RSS
+plot(forward.fit$rss, xlab = 'Number of Predictors', ylab = 'Training RSS', main = 'Forward Subset Selection')
+```
+
+*Training RSS starts to level off after about 5 or 6 predictors.*
+
+```{r}
+coef(forward.fit, id = 5)
+```
+
+*The 5 predictor model fit with forward selection includes the following predictors: whether or not the school is private (Private), room and board costs (Room.Board), the percentage of faculty with a terminal degree (Terminal), the percentage of alumni who donate (perc.alumni), and instructional expenditure per student (Expend).*
+
+
+```{r}
+# Look at the RSS from the test data for each fit
+forward.rss = rep(NA, ncol(College) - 1)
+for (i in 1:(ncol(College) - 1)){
+  coefi = coef(forward.fit, id = i)
+  pred = model.matrix(Outstate ~ ., College[-train,])[,names(coefi)]%*%coefi
+  forward.rss[i] = mean((College[-train, 'Outstate'] - pred)^2)
+}
+
+# and plot it
+plot(forward.rss, xlab = 'Number of Predictors', ylab = 'Test RSS', main = 'Forward Subset Selection')
+```
+
+```{r}
+# Find the model that minimizes test RSS
+forward.id = which.min(forward.rss)
+forward.id
+coef(forward.fit, id = forward.id)
+```
+
+*With 16 predictors, we mimize the test RSS. The only predictor left out of this model is the estimated book costs.*
+
+(b) Fit a GAM on the training data, using out-of-state tuition as the response and the features selected in the previous step as the predictors. Plot the results and explain your findings.
+
+```{r}
+# Use CV to identify the best 4 spline fit with the coefficients from the 5 predictor forward selection model (Private is a qualitative predictor, so it doesn't get a spline)
+n.pred = 4
+df.min = 3
+df.max = 10
+df.array = rep(df.min, n.pred)
+min.error = Inf
+
+set.seed(1)
+for (index.start in n.pred:1){
+  for (index in index.start:n.pred){
+    for (df in df.min:df.max){
+      df.array[index] = df
+      this.fit = glm(Outstate ~ Private + bs(Room.Board, df.array[1]) + bs(Terminal, df.array[2]) + bs(perc.alumni, df.array[3]) + bs(Expend, df.array[4]), data = College[train,])
+      this.error = cv.glm(College[train,], this.fit, K = 10)$delta[1]
+      if (this.error < min.error){
+        min.error = this.error
+        best.fit = this.fit
+        best.df = df.array
+      }
+    }
+  }
+}
+
+best.df
+```
+
+*Our CV chose splines with only 3 degrees of freedom for all but the Expend predictor. This suggests that perhaps we may use less flexible models for these other predictors.*
+
+(c) Evaluate the model obtained on the test set and explain the results obtained.
+
+```{r}
+# Compare the test rss from our gam model to the test rss values from forward selection
+gam.pred = predict(best.fit, College[-train,])
+gam.rss = mean((College[-train, 'Outstate'] - gam.pred)^2)
+
+plot(forward.rss, xlab = 'Number of Predictors', ylab = 'Test RSS', col = 'blue', pch = 20)
+points(5, gam.rss, col = 'red', pch = 20)
+legend('topright', legend = c('Forward Selection', 'Spline GAM'), col = c('blue', 'red'), pch = 20)
+```
+
+*We can see that our gam model with 5 predictors performs about as well as the forward selection model with 11+ predictors.*
+
+(d) For which variables, if any, is there evidence of a non-linear relationship with the response?
+
+*Our CV results selecting 6 degrees of freedom for the Expend predictor certainly suggests a non-linear relationship there. Since our CV only selected 3 degrees of freedom (the minimum we allowed) for the other predictors, they could potentially have more linear relationships. Let's investigate.*
+
+```{r}
+# Room.Board
+fit.1 = lm(Outstate ~ Room.Board, data = College)
+fit.2 = lm(Outstate ~ poly(Room.Board, 2), data = College)
+fit.3 = lm(Outstate ~ poly(Room.Board, 3), data = College)
+anova(fit.1, fit.2, fit.3)
+```
+
+*There is some evidence of a non-linear relationship between Outstate and Room.Board. A spline fit was probably too flexible for our GAM.*
+
+```{r}
+# Terminal
+fit.1 = lm(Outstate ~ Terminal, data = College)
+fit.2 = lm(Outstate ~ poly(Terminal, 2), data = College)
+fit.3 = lm(Outstate ~ poly(Terminal, 3), data = College)
+anova(fit.1, fit.2, fit.3)
+```
+
+*There is strong evidence of a non-linear relationship, perhaps even a cubic relationship, between Outstate and Terminal. It seems like a spline fit in our GAM may have been a good idea.*
+
+```{r}
+# perc.alumni
+fit.1 = lm(Outstate ~ perc.alumni, data = College)
+fit.2 = lm(Outstate ~ poly(perc.alumni, 2), data = College)
+fit.3 = lm(Outstate ~ poly(perc.alumni, 3), data = College)
+anova(fit.1, fit.2, fit.3)
+```
+
+*There is no strong evidence of a non-linear relationship between Outstate and perc.alumni. We probably should not have modeled a spline relationship in our GAM.*
+
+---
+
+# Exercise 11
+
+In Section 7.7, it was mentioned that GAMs are generally fit using a *backfitting* approach. The idea behind backfitting is actually quite simple. We will now explore backfitting in the context of multiple linear regression.
+
+Suppose that we would like to perform multiple linear regression, but we do not have software to do so. Instead, we only have software to perform simple linear regression. Therefore, we take the following iterative approach: we repeatedly hold all but one coefficient estimate fixed at its current value, and update only that coefficient estimate using a simple linear regression. The process is continued until *convergence* - that is, until the coefficient estimates stop changing.
+
+We now try this out on a toy example.
+
+(a) Generate a response $Y$ and two predictors $X_1$ and $X_2$, with $n = 100$.
+
+```{r}
+set.seed(1)
+n = 100
+x1 = rnorm(n)
+x2 = rnorm(n)
+epsilon = rnorm(n)
+beta0 = 0.5
+beta1 = 1.0
+beta2 = 1.5
+y = beta0 + beta1 * x1 + beta2 * x2 + epsilon
+```
+
+*The true relationship is* $Y = 0.5 + 1.0 X_1 + 1.5 X_2 + \epsilon$.
+
+(b) Initialize $\hat{\beta_1}$ to take on a value of your choice. It does not matter what value you choose.
+
+```{r}
+beta1.hat = .9
+```
+
+
+(c) Keeping $\hat{\beta_1}$ fixed, fit the model $$Y - \hat{\beta_1} X_1 = \beta_0 + \beta_2 X_2 + \epsilon$$. You can do this as follows:
+
+```
+a = y - beta1 * x1
+beta2 = lm(a ~ x2)$coef[2]
+```
+
+```{r}
+a = y - beta1.hat * x1
+beta2.hat = lm(a ~ x2)$coef[2]
+beta2.hat
+```
+
+*With just one iteration (with an erroneous *$\hat{\beta_1}$*), we already get close to the true* $\hat{\beta_2}$ *value of 1.5*.
+
+(d) Keeping $\hat{\beta_2}$ fixed, fit the model $$Y - \hat{\beta_2} X_2 = \beta_0 + \beta_1 X_1 + \epsilon$$. You can do this as follows:
+
+```
+a = y - beta2 * x2
+beta1 = lm(a ~ x1)$coef[2]
+```
+
+```{r}
+a = y - beta2.hat
+beta1.hat = lm(a ~ x1)$coef[2]
+beta1.hat
+```
+
+*Using the estimated* $\hat{\beta_2}$ *of 1.44642, we get our* $\hat{\beta_1}$ *much closer to the true value*.
+
+
+(e) Write a for loop to repeat (c) and (d) 1,000 times. Report the estimates of $\hat{\beta_0}$, $\hat{\beta_1}$, and $\hat{\beta_2}$ at each iteration of the for loop. Create a plot in which each of these values is displayed, with $\hat{\beta_0}$, $\hat{\beta_1}$, and $\hat{\beta_2}$ each shown in a different color.
+
+```{r}
+iterations = 1000
+beta0.hat = rep(NA, iterations)
+beta1.hat = rep(NA, iterations)
+beta2.hat = rep(NA, iterations)
+
+# Since those estimates were quite close after just one iteration, let's start a fairly bad estimate
+beta1.hat[1] = 15
+
+for (i in 1:iterations){
+  a = y - beta1.hat[i] * x1
+  beta2.hat[i] = lm(a ~ x2)$coef[2]
+  a = y - beta2.hat[i] * x2
+  fit = lm(a ~ x1)
+  if (i < iterations){
+    beta1.hat[i + 1] = fit$coef[2]
+  }
+  beta0.hat[i] = fit$coef[1]
+}
+
+plot(beta0.hat, xlab = 'Number of Iterations', ylab = 'Coefficient Estimate', main = 'Backfitting Convergence', col = 'blue', lty = 1, type = 'l', ylim = c(0, max(rbind(beta0.hat, beta1.hat, beta2.hat)) + 1))
+lines(beta1.hat, col = 'green', lty = 1)
+lines(beta2.hat, col = 'red', lty = 1)
+legend('topright', legend = c('Beta_0', 'Beta_1', 'Beta_2'), col = c('blue', 'green', 'red'), lty = 1)
+```
+
+
+(f) Compare your answer in (e) to the results of simply performing multiple linear regression to predict $Y$ using $X_1$ and $X_2$. Use the **abline()** function to overlay those multiple linear regression coefficient estimates on the plot obtained in (2).
+
+```{r}
+lm.fit = lm(y ~ x1 + x2)
+
+plot(beta0.hat, xlab = 'Number of Iterations', ylab = 'Coefficient Estimate', main = 'Backfitting Convergence v. Multiple Linear Regression (Zoomed)', col = 'blue', lty = 1, type = 'l', ylim = c(.45, 1.55), xlim = c(1, 5))
+lines(beta1.hat, col = 'green', lty = 1)
+lines(beta2.hat, col = 'red', lty = 1)
+abline(h = lm.fit$coef[1], lty = 2, col = 'blue')
+abline(h = lm.fit$coef[2], lty = 2, col = 'green')
+abline(h = lm.fit$coef[3], lty = 2, col = 'red')
+legend('topright', legend = c('Backfit Beta_0', 'Regression Beta_0', 'Backfit Beta_1', 'Regression Beta_1', 'Backfit Beta_2', 'Regression Beta_2'), col = c('blue', 'blue', 'green', 'green', 'red', 'red'), lty = c(1, 2, 1, 2, 1, 2))
+
+```
+
+```{r}
+data.frame(parameter = c('Beta0', 'Beta1', 'Beta2'), true.value = c(beta0, beta1, beta2), backfit.value = c(beta0.hat[iterations], beta1.hat[iterations], beta2.hat[iterations]), lm.value = lm.fit$coef)
+```
+
+*You can see that the backfit values converge to the same parameter estimates as the multiple linear regression.*
+
+(g) On this data set, how many backfitting iterations were required in order to obtain a "good" approximation to the multiple regression coefficient estimates?
+
+```{r}
+index = cbind(1:5, c(iterations))
+beta0.hat[index]
+beta1.hat[index]
+beta2.hat[index]
+```
+
+*You can see that after just 2 iterations, the estimates get to their final values. Obviously, 1000 iterations was a bit excessive.*
+
+---
+
+# Exercise 12
+
+This problem is a continuation of the previous exercise. In a toy example with $p = 100$, show that one can approximate the multiple linear regression coefficient estimates by repeatedly performing simple linear regression in a backfitting procedure. How many backfitting iterations are required in order to obtain a "good" approximation to the multilpe regression coefficient estimates? Create a plot to justify your answer.
+
+```{r}
+# Number of predictors
+p = 100
+# Number of observations
+n = p * p
+
+# Create matrix of observations
+set.seed(1)
+x = matrix(nrow = n, ncol = p)
+for (col in 1:p){
+  x[,col] = rnorm(n)
+}
+
+# Create error term (since there are so many predictors, we'll give the error a bit more standard deviation to be significant)
+epsilon = rnorm(n, sd = 10)
+
+# Create array of true beta values
+beta = rnorm(p)
+
+# Create the response (note that beta0 = 0; i.e. no intercept term in the true relationship)
+y = x %*% beta + epsilon
+
+# Get the multiple linear regression fit
+lm.fit = lm(y ~ x)
+lm.estimates = lm.fit$coef[-1]
+lm.magnitude = sqrt(sum(lm.estimates^2))
+```
+
+```{r}
+# Initialize parameter estimates, the first estimates will be all 0, the mean value used to initialize the true beta values
+beta.hat = rep(0, p)
+
+# We'll keep track of the "percentage distance" between the estimated parameter vector from the multiple linear regression and the estimated parameter vector from each iteration of the backfitting
+# When this percentage distance is <=1%, we'll stop iterating
+this.distance = Inf
+percentage.distance = c()
+iterations = 0
+threshold = .01
+while (this.distance > threshold){
+  for (j in 1:p){
+    a = y - x[,-j] %*% beta.hat[-j]
+    beta.hat[j] = lm(a ~ x[,j])$coef[2]
+  }
+  this.distance = sqrt(sum((lm.estimates - beta.hat)^2)) / lm.magnitude
+  iterations = iterations + 1
+  percentage.distance[iterations] = this.distance
+}
+
+iterations
+percentage.distance
+```
+
+*It turns out it only takes 2 iterations of backfitting to get our estimated parameter vector within 1% of the multiple linear regression estimated parameters. In fact, the second iterations got within 0.37% - pretty good.*
+
+```{r}
+# Let's also compare the residual sum of squares between the two
+lm.rss = sum(lm.fit$residuals^2)
+backfit.rss = sum((y - x %*% beta.hat)^2)
+print(paste('Multiple linear regression:', lm.rss))
+print(paste('Backfit with', iterations, 'iterations:', backfit.rss))
+print(paste('% Delta:', (backfit.rss - lm.rss) * 100 / lm.rss))
+```
+
+*The delta between the RSS of the multiple linear regression and the backfit is also very small (less than .039%).*
+
+*I know that the problem statement asked for some plots to verify, but since it only took 2 iterations, it's really not worthwhile to plot.*
